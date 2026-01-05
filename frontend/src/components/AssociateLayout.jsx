@@ -28,6 +28,7 @@ const AssociateLayout = () => {
   const location = useLocation();
   const { user, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [dropdowns, setDropdowns] = useState({});
 
   const toggleDropdown = (key) => {
@@ -113,47 +114,60 @@ const AssociateLayout = () => {
   return (
     <div className="flex h-screen bg-gray-50">
       {/* Sidebar */}
-      <div className={`fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0 flex flex-col`}>
-        <div className="flex items-center justify-between h-16 px-6 border-b border-gray-200">
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-gradient-to-r from-red-600 to-black rounded-lg flex items-center justify-center">
-              <Building className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-xl font-bold text-gray-900">SP City</span>
+      <div className={`fixed inset-y-0 left-0 z-50 bg-white shadow-lg transform transition-all duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0 flex flex-col ${
+        sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+      } ${
+        sidebarCollapsed ? 'lg:w-16' : 'lg:w-64'
+      } w-64`}>
+        <div className={`flex items-center ${sidebarCollapsed ? 'justify-center' : 'justify-between'} h-16 px-6 border-b border-gray-200`}>
+          <div className="flex items-center">
+            <h1 className="text-lg font-bold text-gray-900">SP City</h1>
           </div>
-          <button
-            onClick={() => setSidebarOpen(false)}
-            className="lg:hidden p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          {!sidebarCollapsed && (
+            <button
+              onClick={() => setSidebarOpen(false)}
+              className="lg:hidden p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          <nav className="px-4 py-6 space-y-2">
+          <nav className={`${sidebarCollapsed ? 'px-2' : 'px-4'} py-6 space-y-2`}>
             {menuItems.map((item) => (
               <div key={item.title}>
                 {item.submenu ? (
                   <div>
                     <button
-                      onClick={() => toggleDropdown(item.key)}
-                      className={`w-full flex items-center justify-between px-4 py-3 text-sm font-medium rounded-lg transition-colors ${
+                      onClick={() => {
+                        if (sidebarCollapsed) {
+                          navigate(item.submenu[0].path);
+                          setSidebarOpen(false);
+                        } else {
+                          toggleDropdown(item.key);
+                        }
+                      }}
+                      className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center p-3' : 'justify-between px-4 py-3'} text-sm font-medium rounded-lg transition-colors ${
                         isSubmenuActive(item.submenu)
                           ? 'bg-gradient-to-r from-red-600 to-black text-white'
                           : 'text-gray-700 hover:bg-gray-100'
                       }`}
+                      title={sidebarCollapsed ? item.title : ''}
                     >
                       <div className="flex items-center space-x-3">
                         <item.icon className="w-5 h-5" />
-                        <span>{item.title}</span>
+                        {!sidebarCollapsed && <span>{item.title}</span>}
                       </div>
-                      {dropdowns[item.key] ? (
-                        <ChevronDown className="w-4 h-4" />
-                      ) : (
-                        <ChevronRight className="w-4 h-4" />
+                      {!sidebarCollapsed && (
+                        dropdowns[item.key] ? (
+                          <ChevronDown className="w-4 h-4" />
+                        ) : (
+                          <ChevronRight className="w-4 h-4" />
+                        )
                       )}
                     </button>
-                    {dropdowns[item.key] && (
+                    {dropdowns[item.key] && !sidebarCollapsed && (
                       <div className="mt-2 ml-4 space-y-1">
                         {item.submenu.map((subItem) => (
                           <button
@@ -181,14 +195,15 @@ const AssociateLayout = () => {
                       navigate(item.path);
                       setSidebarOpen(false);
                     }}
-                    className={`w-full flex items-center space-x-3 px-4 py-3 text-sm font-medium rounded-lg transition-colors ${
+                    className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center p-3' : 'space-x-3 px-4 py-3'} text-sm font-medium rounded-lg transition-colors ${
                       isActive(item.path)
                         ? 'bg-gradient-to-r from-red-600 to-black text-white'
                         : 'text-gray-700 hover:bg-gray-100'
                     }`}
+                    title={sidebarCollapsed ? item.title : ''}
                   >
                     <item.icon className="w-5 h-5" />
-                    <span>{item.title}</span>
+                    {!sidebarCollapsed && <span>{item.title}</span>}
                   </button>
                 )}
               </div>
@@ -197,23 +212,40 @@ const AssociateLayout = () => {
         </div>
 
         {/* User Profile & Logout */}
-        <div className="p-4 border-t border-gray-200">
-          <div className="flex items-center space-x-3 mb-4">
-            <div className="w-10 h-10 bg-gradient-to-r from-red-600 to-black rounded-full flex items-center justify-center">
-              <User className="w-5 h-5 text-white" />
+        <div className={`${sidebarCollapsed ? 'p-2' : 'p-4'} border-t border-gray-200`}>
+          {!sidebarCollapsed ? (
+            <>
+              <div className="flex items-center space-x-3 mb-4">
+                <div className="w-10 h-10 bg-gradient-to-r from-red-600 to-black rounded-full flex items-center justify-center">
+                  <User className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-900">{user?.name}</p>
+                  <p className="text-xs text-gray-500">Associate</p>
+                </div>
+              </div>
+              <button
+                onClick={handleLogout}
+                className="w-full flex items-center space-x-3 px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Logout</span>
+              </button>
+            </>
+          ) : (
+            <div className="flex flex-col items-center space-y-3">
+              <div className="w-10 h-10 bg-gradient-to-r from-red-600 to-black rounded-full flex items-center justify-center">
+                <User className="w-5 h-5 text-white" />
+              </div>
+              <button
+                onClick={handleLogout}
+                className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                title="Logout"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
             </div>
-            <div>
-              <p className="text-sm font-medium text-gray-900">{user?.name}</p>
-              <p className="text-xs text-gray-500">Associate</p>
-            </div>
-          </div>
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center space-x-3 px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-          >
-            <LogOut className="w-4 h-4" />
-            <span>Logout</span>
-          </button>
+          )}
         </div>
       </div>
 
@@ -222,12 +254,23 @@ const AssociateLayout = () => {
         {/* Header */}
         <header className="bg-white shadow-sm border-b border-gray-200">
           <div className="flex items-center justify-between px-6 py-4">
-            <button
-              onClick={() => setSidebarOpen(true)}
-              className="lg:hidden p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100"
-            >
-              <Menu className="w-5 h-5" />
-            </button>
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={() => setSidebarOpen(true)}
+                className="lg:hidden p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100"
+              >
+                <Menu className="w-5 h-5" />
+              </button>
+              
+              {/* Menu Toggle for Desktop */}
+              <button
+                onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                className="hidden lg:flex p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 transition-colors"
+              >
+                <Menu className="w-5 h-5" />
+              </button>
+            </div>
+            
             <div className="flex items-center space-x-4">
               <span className="text-sm text-gray-500">Welcome back, {user?.name}</span>
             </div>

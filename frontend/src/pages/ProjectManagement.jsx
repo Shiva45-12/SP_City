@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Building, Plus, Edit, Trash2, Eye, MapPin, Calendar, DollarSign, Users, Search, MoreVertical, Grid, List } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { Pagination, ExportButton, usePagination } from '../utils/tableUtils.jsx';
+import { projectsAPI } from '../utils/api';
 import Swal from 'sweetalert2';
 
 const ProjectManagement = () => {
@@ -12,42 +13,54 @@ const ProjectManagement = () => {
   const [selectedProject, setSelectedProject] = useState(null);
   const [showViewModal, setShowViewModal] = useState(false);
   const [viewProject, setViewProject] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [projects, setProjects] = useState([]);
+  const [pagination, setPagination] = useState({ current: 1, pages: 1, total: 0 });
 
   const [formData, setFormData] = useState({
     name: '',
     location: '',
     type: '',
     totalUnits: '',
+    availableUnits: '',
+    pricePerUnit: '',
+    budget: '',
     startDate: '',
     endDate: '',
-    priceRange: '',
     description: '',
-    image: null,
-    imagePreview: null
+    amenities: []
   });
 
-  const [projects, setProjects] = useState([
-    { id: 1, name: 'SP Heights', location: 'Sector 15, Gurgaon', type: 'Residential', status: 'Active', startDate: '2024-01-15', endDate: '2025-12-31', totalUnits: 120, soldUnits: 45, priceRange: '₹45L - ₹85L', leads: 67, image: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=400&h=300&fit=crop', description: 'Premium residential project with modern amenities' },
-    { id: 2, name: 'SP Gardens', location: 'Sector 22, Noida', type: 'Residential', status: 'Active', startDate: '2024-03-20', endDate: '2026-06-30', totalUnits: 200, soldUnits: 78, priceRange: '₹35L - ₹65L', leads: 89, image: 'https://images.unsplash.com/photo-1582407947304-fd86f028f716?w=400&h=300&fit=crop', description: 'Affordable housing with green spaces' },
-    { id: 3, name: 'SP Plaza', location: 'MG Road, Delhi', type: 'Commercial', status: 'Completed', startDate: '2023-06-10', endDate: '2024-11-30', totalUnits: 50, soldUnits: 50, priceRange: '₹1.2Cr - ₹3.5Cr', leads: 34, image: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=400&h=300&fit=crop', description: 'Prime commercial space in business district' },
-    { id: 4, name: 'SP Towers', location: 'Cyber City, Gurgaon', type: 'Commercial', status: 'Active', startDate: '2024-02-10', endDate: '2025-08-15', totalUnits: 80, soldUnits: 25, priceRange: '₹80L - ₹2Cr', leads: 45, image: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=400&h=300&fit=crop', description: 'Modern office spaces with IT infrastructure' },
-    { id: 5, name: 'SP Residency', location: 'Sector 45, Noida', type: 'Residential', status: 'Active', startDate: '2024-04-01', endDate: '2026-03-31', totalUnits: 150, soldUnits: 60, priceRange: '₹55L - ₹95L', leads: 72, image: 'https://images.unsplash.com/photo-1582407947304-fd86f028f716?w=400&h=300&fit=crop', description: 'Luxury apartments with club facilities' },
-    { id: 6, name: 'SP Mall', location: 'Connaught Place, Delhi', type: 'Commercial', status: 'On Hold', startDate: '2024-01-20', endDate: '2025-12-20', totalUnits: 100, soldUnits: 15, priceRange: '₹1.5Cr - ₹5Cr', leads: 28, image: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=400&h=300&fit=crop', description: 'Retail and entertainment complex' },
-    { id: 7, name: 'SP Villas', location: 'Golf Course Road, Gurgaon', type: 'Residential', status: 'Active', startDate: '2024-05-15', endDate: '2026-12-31', totalUnits: 40, soldUnits: 12, priceRange: '₹2Cr - ₹5Cr', leads: 35, image: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=400&h=300&fit=crop', description: 'Independent villas with private gardens' },
-    { id: 8, name: 'SP Tech Park', location: 'Sector 62, Noida', type: 'Commercial', status: 'Active', startDate: '2024-03-01', endDate: '2025-10-31', totalUnits: 60, soldUnits: 22, priceRange: '₹1Cr - ₹3Cr', leads: 41, image: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=400&h=300&fit=crop', description: 'IT park with modern facilities' },
-    { id: 9, name: 'SP Homes', location: 'Sector 18, Gurgaon', type: 'Residential', status: 'Active', startDate: '2024-06-01', endDate: '2026-05-31', totalUnits: 180, soldUnits: 55, priceRange: '₹40L - ₹75L', leads: 68, image: 'https://images.unsplash.com/photo-1582407947304-fd86f028f716?w=400&h=300&fit=crop', description: 'Mid-segment housing with amenities' },
-    { id: 10, name: 'SP Square', location: 'Sector 32, Noida', type: 'Mixed Use', status: 'Active', startDate: '2024-07-01', endDate: '2026-06-30', totalUnits: 90, soldUnits: 30, priceRange: '₹60L - ₹1.5Cr', leads: 52, image: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=400&h=300&fit=crop', description: 'Mixed-use development with retail and residential' },
-    { id: 11, name: 'SP Elite', location: 'DLF Phase 3, Gurgaon', type: 'Residential', status: 'Active', startDate: '2024-08-01', endDate: '2026-07-31', totalUnits: 75, soldUnits: 18, priceRange: '₹1.2Cr - ₹2.5Cr', leads: 38, image: 'https://images.unsplash.com/photo-1582407947304-fd86f028f716?w=400&h=300&fit=crop', description: 'Premium apartments in prime location' },
-    { id: 12, name: 'SP Business Hub', location: 'Sector 44, Noida', type: 'Commercial', status: 'Active', startDate: '2024-09-01', endDate: '2025-11-30', totalUnits: 45, soldUnits: 8, priceRange: '₹2Cr - ₹6Cr', leads: 25, image: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=400&h=300&fit=crop', description: 'Business center with conference facilities' }
-  ]);
+  useEffect(() => {
+    fetchProjects();
+  }, [searchTerm]);
 
-  const filteredProjects = projects.filter(project =>
-    project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    project.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    project.type.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const fetchProjects = async (page = 1) => {
+    try {
+      setLoading(true);
+      const params = {
+        page,
+        limit: 10,
+        ...(searchTerm && { search: searchTerm })
+      };
+      
+      const response = await projectsAPI.getAll(params);
+      if (response.success) {
+        setProjects(response.data);
+        setPagination(response.pagination);
+      }
+    } catch (error) {
+      toast.error('Failed to fetch projects');
+      console.error('Error fetching projects:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const { currentPage, totalPages, currentData, goToPage, totalItems } = usePagination(filteredProjects, 10);
+  const filteredProjects = projects;
+  const handlePageChange = (page) => {
+    fetchProjects(page);
+  };
 
   const handleViewProject = (project) => {
     setViewProject(project);
@@ -102,8 +115,14 @@ const ProjectManagement = () => {
     });
 
     if (result.isConfirmed) {
-      setProjects(projects.filter(p => p.id !== id));
-      toast.success('Project deleted successfully!');
+      try {
+        await projectsAPI.delete(id);
+        toast.success('Project deleted successfully!');
+        fetchProjects();
+      } catch (error) {
+        toast.error('Failed to delete project');
+        console.error('Error deleting project:', error);
+      }
     }
   };
 
@@ -134,43 +153,37 @@ const ProjectManagement = () => {
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (modalType === 'add') {
-      const newProject = {
-        ...formData,
-        id: Date.now(),
-        totalUnits: parseInt(formData.totalUnits),
-        soldUnits: 0,
-        leads: 0,
-        status: 'Active',
-        image: formData.imagePreview
-      };
-      setProjects([...projects, newProject]);
-      toast.success(`${formData.name} has been added to projects.`);
-    } else {
-      setProjects(projects.map(p => 
-        p.id === selectedProject.id 
-          ? { ...p, ...formData, totalUnits: parseInt(formData.totalUnits), image: formData.imagePreview }
-          : p
-      ));
-      toast.success(`${formData.name} has been updated.`);
+    try {
+      if (modalType === 'add') {
+        await projectsAPI.create(formData);
+        toast.success(`${formData.name} has been added to projects.`);
+      } else {
+        await projectsAPI.update(selectedProject._id, formData);
+        toast.success(`${formData.name} has been updated.`);
+      }
+      
+      setFormData({
+        name: '',
+        location: '',
+        type: '',
+        totalUnits: '',
+        availableUnits: '',
+        pricePerUnit: '',
+        budget: '',
+        startDate: '',
+        endDate: '',
+        description: '',
+        amenities: []
+      });
+      setShowModal(false);
+      fetchProjects();
+    } catch (error) {
+      toast.error(`Failed to ${modalType} project`);
+      console.error(`Error ${modalType}ing project:`, error);
     }
-    
-    setFormData({
-      name: '',
-      location: '',
-      type: '',
-      totalUnits: '',
-      startDate: '',
-      endDate: '',
-      priceRange: '',
-      description: '',
-      image: null,
-      imagePreview: null
-    });
-    setShowModal(false);
   };
 
   return (
@@ -241,91 +254,98 @@ const ProjectManagement = () => {
         {/* Projects Cards View */}
         {viewMode === 'cards' && (
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-            {currentData.map((project) => (
-              <div key={project.id} className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-                <div className="relative h-48 bg-purple-400 overflow-hidden">
-                  {project.image ? (
-                    <img 
-                      src={project.image} 
-                      alt={project.name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
+            {loading ? (
+              <div className="col-span-full text-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600 mx-auto"></div>
+              </div>
+            ) : filteredProjects.length > 0 ? (
+              filteredProjects.map((project) => (
+                <div key={project._id} className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                  <div className="relative h-48 bg-purple-400 overflow-hidden">
                     <div className="flex items-center justify-center h-full">
                       <Building className="w-16 h-16 text-white" />
                     </div>
-                  )}
-                  <span className={`absolute top-3 right-3 px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(project.status)}`}>
-                    {project.status}
-                  </span>
-                </div>
-
-                <div className="p-6 space-y-4">
-                  <div>
-                    <h3 className="text-xl font-bold text-gray-900">{project.name}</h3>
-                    <div className="flex items-center space-x-2 mt-1">
-                      <MapPin className="w-4 h-4 text-gray-400" />
-                      <span className="text-sm text-gray-600">{project.location}</span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <span className="px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                      {project.type}
+                    <span className={`absolute top-3 right-3 px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(project.status)}`}>
+                      {project.status}
                     </span>
-                    <div className="flex items-center space-x-2">
-                      <DollarSign className="w-4 h-4 text-gray-400" />
-                      <span className="text-sm font-medium">{project.priceRange}</span>
-                    </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="text-center p-3 bg-gray-50 rounded-lg">
-                      <p className="text-lg font-bold">{project.soldUnits}/{project.totalUnits}</p>
-                      <p className="text-xs text-gray-600">Units Sold</p>
-                      <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
-                        <div 
-                          className="bg-green-500 h-2 rounded-full" 
-                          style={{ width: `${(project.soldUnits / project.totalUnits) * 100}%` }}
-                        ></div>
+                  <div className="p-6 space-y-4">
+                    <div>
+                      <h3 className="text-xl font-bold text-gray-900">{project.name}</h3>
+                      <div className="flex items-center space-x-2 mt-1">
+                        <MapPin className="w-4 h-4 text-gray-400" />
+                        <span className="text-sm text-gray-600">{project.location}</span>
                       </div>
                     </div>
-                    <div className="text-center p-3 bg-gray-50 rounded-lg">
-                      <p className="text-lg font-bold">{project.leads}</p>
-                      <p className="text-xs text-gray-600">Active Leads</p>
+
+                    <div className="flex items-center justify-between">
+                      <span className="px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        {project.type}
+                      </span>
+                      <div className="flex items-center space-x-2">
+                        <DollarSign className="w-4 h-4 text-gray-400" />
+                        <span className="text-sm font-medium">₹{project.pricePerUnit?.toLocaleString()}</span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="text-center p-3 bg-gray-50 rounded-lg">
+                        <p className="text-lg font-bold">{project.availableUnits}/{project.totalUnits}</p>
+                        <p className="text-xs text-gray-600">Available/Total</p>
+                        <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
+                          <div 
+                            className="bg-green-500 h-2 rounded-full" 
+                            style={{ width: `${((project.totalUnits - project.availableUnits) / project.totalUnits) * 100}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                      <div className="text-center p-3 bg-gray-50 rounded-lg">
+                        <p className="text-lg font-bold">₹{(project.budget / 100000).toFixed(1)}L</p>
+                        <p className="text-xs text-gray-600">Budget</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center space-x-2 text-sm text-gray-600">
+                      <Calendar className="w-4 h-4" />
+                      <span>{new Date(project.startDate).toLocaleDateString()} - {project.endDate ? new Date(project.endDate).toLocaleDateString() : 'Ongoing'}</span>
+                    </div>
+
+                    <div className="flex space-x-2 pt-2">
+                      <button 
+                        onClick={() => handleViewProject(project)}
+                        className="flex-1 btn-primary flex items-center justify-center space-x-2 text-sm py-2"
+                      >
+                        <Eye className="w-4 h-4" />
+                        <span>View</span>
+                      </button>
+                      <button 
+                        onClick={() => handleEditProject(project)}
+                        className="flex-1 btn-primary flex items-center justify-center space-x-2 text-sm py-2"
+                      >
+                        <Edit className="w-4 h-4" />
+                        <span>Edit</span>
+                      </button>
+                      <button 
+                        onClick={() => handleDeleteProject(project._id)}
+                        className="btn-primary p-2 rounded-lg"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
                   </div>
-
-                  <div className="flex items-center space-x-2 text-sm text-gray-600">
-                    <Calendar className="w-4 h-4" />
-                    <span>{project.startDate} - {project.endDate}</span>
-                  </div>
-
-                  <div className="flex space-x-2 pt-2">
-                    <button 
-                      onClick={() => handleViewProject(project)}
-                      className="flex-1 btn-primary flex items-center justify-center space-x-2 text-sm py-2"
-                    >
-                      <Eye className="w-4 h-4" />
-                      <span>View</span>
-                    </button>
-                    <button 
-                      onClick={() => handleEditProject(project)}
-                      className="flex-1 btn-primary flex items-center justify-center space-x-2 text-sm py-2"
-                    >
-                      <Edit className="w-4 h-4" />
-                      <span>Edit</span>
-                    </button>
-                    <button 
-                      onClick={() => handleDeleteProject(project.id)}
-                      className="btn-primary p-2 rounded-lg"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
                 </div>
+              ))
+            ) : (
+              <div className="col-span-full text-center py-12">
+                <Building className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No projects found</h3>
+                <p className="text-gray-600 mb-4">Get started by adding your first project</p>
+                <button onClick={handleAddProject} className="btn-primary">
+                  Add Project
+                </button>
               </div>
-            ))}
+            )}
           </div>
         )}
 
@@ -432,25 +452,14 @@ const ProjectManagement = () => {
         )}
 
         {/* Pagination */}
-        {totalPages > 1 && (
+        {pagination.pages > 1 && (
           <Pagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            onPageChange={goToPage}
+            currentPage={pagination.current}
+            totalPages={pagination.pages}
+            onPageChange={handlePageChange}
             itemsPerPage={10}
-            totalItems={totalItems}
+            totalItems={pagination.total}
           />
-        )}
-
-        {filteredProjects.length === 0 && (
-          <div className="text-center py-12">
-            <Building className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No projects found</h3>
-            <p className="text-gray-600 mb-4">Get started by adding your first project</p>
-            <button onClick={handleAddProject} className="btn-primary">
-              Add Project
-            </button>
-          </div>
         )}
       </div>
 

@@ -1,24 +1,51 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Users, Building, DollarSign, TrendingUp, Eye, Phone, CheckCircle, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Highcharts from 'highcharts';
 import HighchartsReact from 'highcharts-react-official';
+import { dashboardAPI, leadsAPI } from '../utils/api';
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  
-  const stats = [
-    { title: 'Total Leads', value: '1,234', icon: Users, color: 'bg-gradient-to-r from-red-600 to-black', change: '+12%' },
-    { title: 'Associates', value: '56', icon: Users, color: 'bg-gradient-to-r from-red-600 to-black', change: '+5%' },
-    { title: 'Projects', value: '23', icon: Building, color: 'bg-gradient-to-r from-red-600 to-black', change: '+8%' },
-    { title: 'Revenue', value: '₹45.2L', icon: DollarSign, color: 'bg-gradient-to-r from-red-600 to-black', change: '+15%' }
-  ];
+  const [stats, setStats] = useState([
+    { title: 'Total Leads', value: '0', icon: Users, color: 'bg-gradient-to-r from-red-600 to-black', change: '+0%' },
+    { title: 'Associates', value: '0', icon: Users, color: 'bg-gradient-to-r from-red-600 to-black', change: '+0%' },
+    { title: 'Projects', value: '0', icon: Building, color: 'bg-gradient-to-r from-red-600 to-black', change: '+0%' },
+    { title: 'Revenue', value: '₹0', icon: DollarSign, color: 'bg-gradient-to-r from-red-600 to-black', change: '+0%' }
+  ]);
+  const [recentLeads, setRecentLeads] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const recentLeads = [
-    { id: 1, name: 'John Doe', phone: '+91 9876543210', status: 'Visit', project: 'SP Heights' },
-    { id: 2, name: 'Jane Smith', phone: '+91 9876543211', status: 'Pending', project: 'SP Gardens' },
-    { id: 3, name: 'Mike Johnson', phone: '+91 9876543212', status: 'Deal Done', project: 'SP Plaza' }
-  ];
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+      const [statsData, leadsData] = await Promise.all([
+        dashboardAPI.getStats(),
+        leadsAPI.getAll({ limit: 5, page: 1 })
+      ]);
+
+      if (statsData.success) {
+        setStats([
+          { title: 'Total Leads', value: statsData.data.totalLeads || '0', icon: Users, color: 'bg-gradient-to-r from-red-600 to-black', change: `+${statsData.data.leadsGrowth || 0}%` },
+          { title: 'Associates', value: statsData.data.totalAssociates || '0', icon: Users, color: 'bg-gradient-to-r from-red-600 to-black', change: `+${statsData.data.associatesGrowth || 0}%` },
+          { title: 'Projects', value: statsData.data.totalProjects || '0', icon: Building, color: 'bg-gradient-to-r from-red-600 to-black', change: `+${statsData.data.projectsGrowth || 0}%` },
+          { title: 'Revenue', value: `₹${(statsData.data.totalRevenue || 0).toLocaleString()}`, icon: DollarSign, color: 'bg-gradient-to-r from-red-600 to-black', change: `+${statsData.data.revenueGrowth || 0}%` }
+        ]);
+      }
+
+      if (leadsData.success) {
+        setRecentLeads(leadsData.data.slice(0, 5));
+      }
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -187,18 +214,26 @@ const Dashboard = () => {
         <div className="card">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Leads</h3>
           <div className="space-y-3">
-            {recentLeads.map((lead) => (
-              <div key={lead.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                <div>
-                  <p className="font-medium text-gray-900">{lead.name}</p>
-                  <p className="text-sm text-gray-600">{lead.phone}</p>
-                  <p className="text-sm text-gray-500">{lead.project}</p>
-                </div>
-                <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(lead.status)}`}>
-                  {lead.status}
-                </span>
+            {loading ? (
+              <div className="text-center py-4">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600 mx-auto"></div>
               </div>
-            ))}
+            ) : recentLeads.length > 0 ? (
+              recentLeads.map((lead) => (
+                <div key={lead._id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div>
+                    <p className="font-medium text-gray-900">{lead.name}</p>
+                    <p className="text-sm text-gray-600">{lead.phone}</p>
+                    <p className="text-sm text-gray-500">{lead.project?.name || 'No Project'}</p>
+                  </div>
+                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(lead.status)}`}>
+                    {lead.status}
+                  </span>
+                </div>
+              ))
+            ) : (
+              <p className="text-gray-500 text-center py-4">No recent leads</p>
+            )}
           </div>
         </div>
 

@@ -1,24 +1,51 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Users, Building, DollarSign, TrendingUp, Eye, Phone, CheckCircle, Clock, MapPin, Calendar, Star, Award } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Highcharts from 'highcharts';
 import HighchartsReact from 'highcharts-react-official';
+import { dashboardAPI, leadsAPI } from '../../utils/api';
 
 const AssociateDashboard = () => {
   const navigate = useNavigate();
-  
-  const stats = [
-    { title: 'My Leads', value: '45', icon: Users, color: 'bg-gradient-to-r from-red-600 to-black', change: '+8%', desc: 'Total leads generated' },
-    { title: 'Site Visits', value: '12', icon: MapPin, color: 'bg-gradient-to-r from-red-600 to-black', change: '+15%', desc: 'Visits completed' },
-    { title: 'Deals Closed', value: '8', icon: CheckCircle, color: 'bg-gradient-to-r from-red-600 to-black', change: '+25%', desc: 'Successful closures' },
-    { title: 'Commission', value: '₹2.5L', icon: DollarSign, color: 'bg-gradient-to-r from-red-600 to-black', change: '+20%', desc: 'Total earnings' }
-  ];
+  const [stats, setStats] = useState([
+    { title: 'My Leads', value: '0', icon: Users, color: 'bg-gradient-to-r from-red-600 to-black', change: '+0%', desc: 'Total leads generated' },
+    { title: 'Site Visits', value: '0', icon: MapPin, color: 'bg-gradient-to-r from-red-600 to-black', change: '+0%', desc: 'Visits completed' },
+    { title: 'Deals Closed', value: '0', icon: CheckCircle, color: 'bg-gradient-to-r from-red-600 to-black', change: '+0%', desc: 'Successful closures' },
+    { title: 'Commission', value: '₹0', icon: DollarSign, color: 'bg-gradient-to-r from-red-600 to-black', change: '+0%', desc: 'Total earnings' }
+  ]);
+  const [recentLeads, setRecentLeads] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const recentLeads = [
-    { id: 1, name: 'John Doe', phone: '+91 9876543210', status: 'Follow Up', project: 'SP Heights', lastContact: '2 hours ago' },
-    { id: 2, name: 'Jane Smith', phone: '+91 9876543211', status: 'Site Visit', project: 'SP Gardens', lastContact: '1 day ago' },
-    { id: 3, name: 'Mike Johnson', phone: '+91 9876543212', status: 'Final', project: 'SP Plaza', lastContact: '3 days ago' }
-  ];
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+      const [statsData, leadsData] = await Promise.all([
+        dashboardAPI.getStats(),
+        leadsAPI.getAll({ limit: 5, page: 1 })
+      ]);
+
+      if (statsData.success) {
+        setStats([
+          { title: 'My Leads', value: statsData.data.totalLeads || '0', icon: Users, color: 'bg-gradient-to-r from-red-600 to-black', change: `+${statsData.data.leadsGrowth || 0}%`, desc: 'Total leads generated' },
+          { title: 'Site Visits', value: statsData.data.totalSiteVisits || '0', icon: MapPin, color: 'bg-gradient-to-r from-red-600 to-black', change: `+${statsData.data.visitsGrowth || 0}%`, desc: 'Visits completed' },
+          { title: 'Deals Closed', value: statsData.data.totalDeals || '0', icon: CheckCircle, color: 'bg-gradient-to-r from-red-600 to-black', change: `+${statsData.data.dealsGrowth || 0}%`, desc: 'Successful closures' },
+          { title: 'Commission', value: `₹${(statsData.data.totalCommission || 0).toLocaleString()}`, icon: DollarSign, color: 'bg-gradient-to-r from-red-600 to-black', change: `+${statsData.data.commissionGrowth || 0}%`, desc: 'Total earnings' }
+        ]);
+      }
+
+      if (leadsData.success) {
+        setRecentLeads(leadsData.data.slice(0, 3));
+      }
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const upcomingSiteVisits = [
     { id: 1, client: 'Sarah Wilson', project: 'SP Heights', time: '10:00 AM', date: 'Today' },
@@ -28,9 +55,10 @@ const AssociateDashboard = () => {
 
   const getStatusColor = (status) => {
     switch (status) {
-      case 'Follow Up': return 'bg-yellow-100 text-yellow-800';
-      case 'Site Visit': return 'bg-blue-100 text-blue-800';
-      case 'Final': return 'bg-green-100 text-green-800';
+      case 'Show': return 'bg-purple-100 text-purple-800';
+      case 'Visit': return 'bg-blue-100 text-blue-800';
+      case 'Pending': return 'bg-yellow-100 text-yellow-800';
+      case 'Deal Done': return 'bg-green-100 text-green-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -214,23 +242,31 @@ const AssociateDashboard = () => {
             <Star className="w-5 h-5 text-yellow-500" />
           </div>
           <div className="space-y-4">
-            {recentLeads.map((lead) => (
-              <div key={lead.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                <div className="flex items-center space-x-4">
-                  <div className="w-10 h-10 bg-gradient-to-r from-red-600 to-black rounded-full flex items-center justify-center">
-                    <Users className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-gray-900">{lead.name}</p>
-                    <p className="text-sm text-gray-600">{lead.phone}</p>
-                    <p className="text-xs text-gray-500">{lead.project} • {lead.lastContact}</p>
-                  </div>
-                </div>
-                <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(lead.status)}`}>
-                  {lead.status}
-                </span>
+            {loading ? (
+              <div className="text-center py-4">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600 mx-auto"></div>
               </div>
-            ))}
+            ) : recentLeads.length > 0 ? (
+              recentLeads.map((lead) => (
+                <div key={lead._id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                  <div className="flex items-center space-x-4">
+                    <div className="w-10 h-10 bg-gradient-to-r from-red-600 to-black rounded-full flex items-center justify-center">
+                      <Users className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900">{lead.name}</p>
+                      <p className="text-sm text-gray-600">{lead.phone}</p>
+                      <p className="text-xs text-gray-500">{lead.project?.name || 'No Project'} • {new Date(lead.createdAt).toLocaleDateString()}</p>
+                    </div>
+                  </div>
+                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(lead.status)}`}>
+                    {lead.status}
+                  </span>
+                </div>
+              ))
+            ) : (
+              <p className="text-gray-500 text-center py-4">No recent leads</p>
+            )}
           </div>
           <button 
             onClick={() => navigate('/associate/leads')}

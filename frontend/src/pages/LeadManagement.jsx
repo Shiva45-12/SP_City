@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Users, Plus, Eye, Phone, Mail, MapPin, Calendar, Filter, Search, MoreVertical, Edit, Trash2, Shield, UserCheck, DollarSign } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { Pagination, ExportButton, usePagination } from '../utils/tableUtils.jsx';
+import { leadsAPI, projectsAPI, associatesAPI } from '../utils/api';
 import Swal from 'sweetalert2';
 
 const LeadManagement = () => {
@@ -12,6 +13,11 @@ const LeadManagement = () => {
   const [selectedLead, setSelectedLead] = useState(null);
   const [showViewModal, setShowViewModal] = useState(false);
   const [viewLead, setViewLead] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [leads, setLeads] = useState([]);
+  const [projects, setProjects] = useState([]);
+  const [associates, setAssociates] = useState([]);
+  const [pagination, setPagination] = useState({ current: 1, pages: 1, total: 0 });
 
   const [formData, setFormData] = useState({
     name: '',
@@ -24,23 +30,59 @@ const LeadManagement = () => {
     notes: ''
   });
 
-  const [leads, setLeads] = useState([
-    { id: 1, name: 'John Doe', phone: '+91 9876543210', email: 'john@email.com', project: 'SP Heights', status: 'Visit', date: '2025-01-02', source: 'Website', budget: '50L', addedBy: 'Admin', addedByName: 'Admin User' },
-    { id: 2, name: 'Jane Smith', phone: '+91 9876543211', email: 'jane@email.com', project: 'SP Gardens', status: 'Pending', date: '2025-01-01', source: 'Referral', budget: '75L', addedBy: 'Associate', addedByName: 'John Associate' },
-    { id: 3, name: 'Mike Johnson', phone: '+91 9876543212', email: 'mike@email.com', project: 'SP Plaza', status: 'Deal Done', date: '2024-12-30', source: 'Social Media', budget: '1Cr', addedBy: 'Admin', addedByName: 'Admin User' },
-    { id: 4, name: 'Sarah Wilson', phone: '+91 9876543213', email: 'sarah@email.com', project: 'SP Heights', status: 'Show', date: '2025-01-02', source: 'Walk-in', budget: '60L', addedBy: 'Associate', addedByName: 'Mike Associate' },
-    { id: 5, name: 'David Brown', phone: '+91 9876543214', email: 'david@email.com', project: 'SP Gardens', status: 'Visit', date: '2025-01-03', source: 'Website', budget: '80L', addedBy: 'Admin', addedByName: 'Admin User' },
-    { id: 6, name: 'Lisa Davis', phone: '+91 9876543215', email: 'lisa@email.com', project: 'SP Plaza', status: 'Pending', date: '2025-01-03', source: 'Referral', budget: '65L', addedBy: 'Associate', addedByName: 'John Associate' },
-    { id: 7, name: 'Robert Miller', phone: '+91 9876543216', email: 'robert@email.com', project: 'SP Heights', status: 'Show', date: '2025-01-04', source: 'Social Media', budget: '90L', addedBy: 'Admin', addedByName: 'Admin User' },
-    { id: 8, name: 'Emily Wilson', phone: '+91 9876543217', email: 'emily@email.com', project: 'SP Gardens', status: 'Deal Done', date: '2025-01-04', source: 'Walk-in', budget: '1.2Cr', addedBy: 'Associate', addedByName: 'Mike Associate' },
-    { id: 9, name: 'James Taylor', phone: '+91 9876543218', email: 'james@email.com', project: 'SP Plaza', status: 'Visit', date: '2025-01-05', source: 'Website', budget: '70L', addedBy: 'Admin', addedByName: 'Admin User' },
-    { id: 10, name: 'Maria Garcia', phone: '+91 9876543219', email: 'maria@email.com', project: 'SP Heights', status: 'Pending', date: '2025-01-05', source: 'Referral', budget: '55L', addedBy: 'Associate', addedByName: 'John Associate' },
-    { id: 11, name: 'William Anderson', phone: '+91 9876543220', email: 'william@email.com', project: 'SP Gardens', status: 'Show', date: '2025-01-06', source: 'Social Media', budget: '85L', addedBy: 'Admin', addedByName: 'Admin User' },
-    { id: 12, name: 'Jennifer Martinez', phone: '+91 9876543221', email: 'jennifer@email.com', project: 'SP Plaza', status: 'Deal Done', date: '2025-01-06', source: 'Walk-in', budget: '95L', addedBy: 'Associate', addedByName: 'Mike Associate' }
-  ]);
+  useEffect(() => {
+    fetchLeads();
+    fetchProjects();
+    fetchAssociates();
+  }, [activeTab, searchTerm]);
+
+  const fetchLeads = async (page = 1) => {
+    try {
+      setLoading(true);
+      const params = {
+        page,
+        limit: 10,
+        ...(searchTerm && { search: searchTerm }),
+        ...(activeTab !== 'all' && { status: activeTab })
+      };
+      
+      const response = await leadsAPI.getAll(params);
+      if (response.success) {
+        setLeads(response.data);
+        setPagination(response.pagination);
+      }
+    } catch (error) {
+      toast.error('Failed to fetch leads');
+      console.error('Error fetching leads:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchProjects = async () => {
+    try {
+      const response = await projectsAPI.getAll();
+      if (response.success) {
+        setProjects(response.data);
+      }
+    } catch (error) {
+      console.error('Error fetching projects:', error);
+    }
+  };
+
+  const fetchAssociates = async () => {
+    try {
+      const response = await associatesAPI.getAll();
+      if (response.success) {
+        setAssociates(response.data);
+      }
+    } catch (error) {
+      console.error('Error fetching associates:', error);
+    }
+  };
 
   const tabs = [
-    { key: 'all', label: 'All Leads', count: leads.length },
+    { key: 'all', label: 'All Leads', count: pagination.total },
     { key: 'Show', label: 'Show', count: leads.filter(l => l.status === 'Show').length },
     { key: 'Visit', label: 'Visit', count: leads.filter(l => l.status === 'Visit').length },
     { key: 'Pending', label: 'Pending', count: leads.filter(l => l.status === 'Pending').length },
@@ -57,15 +99,11 @@ const LeadManagement = () => {
     }
   };
 
-  const filteredLeads = leads.filter(lead => {
-    const matchesTab = activeTab === 'all' || lead.status === activeTab;
-    const matchesSearch = lead.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         lead.phone.includes(searchTerm) ||
-                         lead.project.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesTab && matchesSearch;
-  });
+  const filteredLeads = leads;
 
-  const { currentPage, totalPages, currentData, goToPage, totalItems } = usePagination(filteredLeads, 10);
+  const handlePageChange = (page) => {
+    fetchLeads(page);
+  };
 
   const handleInputChange = (e) => {
     setFormData({
@@ -123,42 +161,45 @@ const LeadManagement = () => {
     });
 
     if (result.isConfirmed) {
-      setLeads(leads.filter(l => l.id !== id));
-      toast.success('Lead deleted successfully!');
+      try {
+        await leadsAPI.delete(id);
+        toast.success('Lead deleted successfully!');
+        fetchLeads();
+      } catch (error) {
+        toast.error('Failed to delete lead');
+        console.error('Error deleting lead:', error);
+      }
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (modalType === 'add') {
-      const newLead = {
-        ...formData,
-        id: Date.now(),
-        date: new Date().toISOString().split('T')[0],
-        addedBy: 'Admin',
-        addedByName: 'Admin User'
-      };
-      setLeads([...leads, newLead]);
-      toast.success('Lead added successfully!');
-    } else {
-      setLeads(leads.map(l => 
-        l.id === selectedLead.id ? { ...l, ...formData } : l
-      ));
-      toast.success('Lead updated successfully!');
-    }
+    try {
+      if (modalType === 'add') {
+        await leadsAPI.create(formData);
+        toast.success('Lead added successfully!');
+      } else {
+        await leadsAPI.update(selectedLead._id, formData);
+        toast.success('Lead updated successfully!');
+      }
 
-    setShowModal(false);
-    setFormData({
-      name: '',
-      phone: '',
-      email: '',
-      project: '',
-      status: 'Pending',
-      source: '',
-      budget: '',
-      notes: ''
-    });
+      setShowModal(false);
+      setFormData({
+        name: '',
+        phone: '',
+        email: '',
+        project: '',
+        status: 'Pending',
+        source: '',
+        budget: '',
+        notes: ''
+      });
+      fetchLeads();
+    } catch (error) {
+      toast.error(`Failed to ${modalType} lead`);
+      console.error(`Error ${modalType}ing lead:`, error);
+    }
   };
 
   return (
@@ -238,121 +279,121 @@ const LeadManagement = () => {
               </tr>
             </thead>
             <tbody>
-              {currentData.map((lead) => (
-                <tr key={lead.id} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="py-4 px-2">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-gradient-to-r from-red-600 to-black rounded-full flex items-center justify-center">
-                        <Users className="w-5 h-5 text-white" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-900">{lead.name}</p>
-                        <p className="text-sm text-gray-600">Source: {lead.source}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="py-4 px-2">
-                    <div className="space-y-1">
-                      <div className="flex items-center space-x-2">
-                        <Phone className="w-4 h-4 text-gray-400" />
-                        <span className="text-sm">{lead.phone}</span>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Mail className="w-4 h-4 text-gray-400" />
-                        <span className="text-sm text-gray-600">{lead.email}</span>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="py-4 px-2">
-                    <div className="flex items-center space-x-2">
-                      <MapPin className="w-4 h-4 text-gray-400" />
-                      <span className="font-medium">{lead.project}</span>
-                    </div>
-                  </td>
-                  <td className="py-4 px-2">
-                    <span className="font-bold text-green-600">₹{lead.budget}</span>
-                  </td>
-                  <td className="py-4 px-2">
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(lead.status)}`}>
-                      {lead.status}
-                    </span>
-                  </td>
-                  <td className="py-4 px-2">
-                    <div className="flex items-center space-x-2">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                        lead.addedBy === 'Admin' 
-                          ? 'bg-gradient-to-r from-red-600 to-black' 
-                          : 'bg-gradient-to-r from-blue-600 to-purple-600'
-                      }`}>
-                        {lead.addedBy === 'Admin' ? (
-                          <Shield className="w-4 h-4 text-white" />
-                        ) : (
-                          <UserCheck className="w-4 h-4 text-white" />
-                        )}
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">{lead.addedBy}</p>
-                        <p className="text-xs text-gray-500">{lead.addedByName}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="py-4 px-2">
-                    <div className="flex items-center space-x-2">
-                      <Calendar className="w-4 h-4 text-gray-400" />
-                      <span className="text-sm text-gray-600">{lead.date}</span>
-                    </div>
-                  </td>
-                  <td className="py-4 px-2">
-                    <div className="flex items-center space-x-2">
-                      <button 
-                        onClick={() => handleViewLead(lead)}
-                        className="btn-primary p-2 rounded-lg"
-                        title="View Details"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                      <button 
-                        onClick={() => handleEditLead(lead)}
-                        className="btn-primary p-2 rounded-lg"
-                        title="Edit Lead"
-                      >
-                        <Edit className="w-4 h-4" />
-                      </button>
-                      <button 
-                        onClick={() => handleDeleteLead(lead.id)}
-                        className="btn-primary p-2 rounded-lg"
-                        title="Delete Lead"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
+              {loading ? (
+                <tr>
+                  <td colSpan="8" className="text-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600 mx-auto"></div>
                   </td>
                 </tr>
-              ))}
+              ) : filteredLeads.length > 0 ? (
+                filteredLeads.map((lead) => (
+                  <tr key={lead._id} className="border-b border-gray-100 hover:bg-gray-50">
+                    <td className="py-4 px-2">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 bg-gradient-to-r from-red-600 to-black rounded-full flex items-center justify-center">
+                          <Users className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900">{lead.name}</p>
+                          <p className="text-sm text-gray-600">Source: {lead.source}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-4 px-2">
+                      <div className="space-y-1">
+                        <div className="flex items-center space-x-2">
+                          <Phone className="w-4 h-4 text-gray-400" />
+                          <span className="text-sm">{lead.phone}</span>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Mail className="w-4 h-4 text-gray-400" />
+                          <span className="text-sm text-gray-600">{lead.email}</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-4 px-2">
+                      <div className="flex items-center space-x-2">
+                        <MapPin className="w-4 h-4 text-gray-400" />
+                        <span className="font-medium">{lead.project?.name || 'No Project'}</span>
+                      </div>
+                    </td>
+                    <td className="py-4 px-2">
+                      <span className="font-bold text-green-600">₹{lead.budget}</span>
+                    </td>
+                    <td className="py-4 px-2">
+                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(lead.status)}`}>
+                        {lead.status}
+                      </span>
+                    </td>
+                    <td className="py-4 px-2">
+                      <div className="flex items-center space-x-2">
+                        <div className="w-8 h-8 bg-gradient-to-r from-red-600 to-black rounded-full flex items-center justify-center">
+                          <Shield className="w-4 h-4 text-white" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{lead.createdBy?.name || 'Admin'}</p>
+                          <p className="text-xs text-gray-500">{lead.createdBy?.role || 'Admin'}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-4 px-2">
+                      <div className="flex items-center space-x-2">
+                        <Calendar className="w-4 h-4 text-gray-400" />
+                        <span className="text-sm text-gray-600">{new Date(lead.createdAt).toLocaleDateString()}</span>
+                      </div>
+                    </td>
+                    <td className="py-4 px-2">
+                      <div className="flex items-center space-x-2">
+                        <button 
+                          onClick={() => handleViewLead(lead)}
+                          className="btn-primary p-2 rounded-lg"
+                          title="View Details"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button 
+                          onClick={() => handleEditLead(lead)}
+                          className="btn-primary p-2 rounded-lg"
+                          title="Edit Lead"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteLead(lead._id)}
+                          className="btn-primary p-2 rounded-lg"
+                          title="Delete Lead"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="8" className="text-center py-12">
+                    <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No leads found</h3>
+                    <p className="text-gray-600 mb-4">Get started by adding your first lead</p>
+                    <button onClick={handleAddLead} className="btn-primary">
+                      Add Lead
+                    </button>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
 
         {/* Pagination */}
-        {totalPages > 1 && (
+        {pagination.pages > 1 && (
           <Pagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            onPageChange={goToPage}
+            currentPage={pagination.current}
+            totalPages={pagination.pages}
+            onPageChange={handlePageChange}
             itemsPerPage={10}
-            totalItems={totalItems}
+            totalItems={pagination.total}
           />
-        )}
-
-        {filteredLeads.length === 0 && (
-          <div className="text-center py-12">
-            <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No leads found</h3>
-            <p className="text-gray-600 mb-4">Get started by adding your first lead</p>
-            <button onClick={handleAddLead} className="btn-primary">
-              Add Lead
-            </button>
-          </div>
         )}
       </div>
 
@@ -422,9 +463,9 @@ const LeadManagement = () => {
                       required
                     >
                       <option value="">Select Project</option>
-                      <option value="SP Heights">SP Heights</option>
-                      <option value="SP Gardens">SP Gardens</option>
-                      <option value="SP Plaza">SP Plaza</option>
+                      {projects.map(project => (
+                        <option key={project._id} value={project._id}>{project.name}</option>
+                      ))}
                     </select>
                   </div>
                 </div>

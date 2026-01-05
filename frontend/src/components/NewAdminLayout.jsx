@@ -20,6 +20,7 @@ const NewAdminLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [projectsOpen, setProjectsOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -89,25 +90,26 @@ const NewAdminLayout = () => {
       )}
 
       {/* Sidebar */}
-      <div className={`fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-xl transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0 flex flex-col border-r border-gray-200 ${
+      <div className={`fixed inset-y-0 left-0 z-50 bg-white shadow-xl transform transition-all duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0 flex flex-col border-r border-gray-200 ${
         sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-      }`}>
-        <div className="flex items-center justify-between h-16 px-6 border-b border-gray-200 flex-shrink-0">
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-gradient-to-r from-red-600 to-black rounded-lg flex items-center justify-center">
-              <Building className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-xl font-bold text-gray-900">SP City</span>
+      } ${
+        sidebarCollapsed ? 'lg:w-16' : 'lg:w-64'
+      } w-64`}>
+        <div className={`flex items-center ${sidebarCollapsed ? 'justify-center' : 'justify-between'} h-16 px-6 border-b border-gray-200 flex-shrink-0`}>
+          <div className="flex items-center">
+            <h1 className="text-lg font-bold text-gray-900">SP City</h1>
           </div>
-          <button 
-            onClick={() => setSidebarOpen(false)}
-            className="lg:hidden p-2 rounded-lg hover:bg-gray-100"
-          >
-            <X className="w-5 h-5 text-gray-600" />
-          </button>
+          {!sidebarCollapsed && (
+            <button 
+              onClick={() => setSidebarOpen(false)}
+              className="lg:hidden p-2 rounded-lg hover:bg-gray-100"
+            >
+              <X className="w-5 h-5 text-gray-600" />
+            </button>
+          )}
         </div>
 
-        <nav className="flex-1 px-3 py-6 overflow-y-auto">
+        <nav className={`flex-1 ${sidebarCollapsed ? 'px-2' : 'px-3'} py-6 overflow-y-auto`}>
           <div className="space-y-2">
             {menuItems.map((item) => {
               const Icon = item.icon;
@@ -116,21 +118,29 @@ const NewAdminLayout = () => {
                 return (
                   <div key={item.path}>
                     <button
-                      onClick={() => setProjectsOpen(!projectsOpen)}
-                      className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all duration-200 ${
+                      onClick={() => {
+                        if (sidebarCollapsed) {
+                          navigate(item.path);
+                          setSidebarOpen(false);
+                        } else {
+                          setProjectsOpen(!projectsOpen);
+                        }
+                      }}
+                      className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center p-3' : 'justify-between p-4'} rounded-2xl transition-all duration-200 ${
                         isActive(item.path) || location.pathname.includes('/admin/sites')
                           ? 'bg-gradient-to-r from-red-600 to-black text-white shadow-lg' 
                           : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
                       }`}
+                      title={sidebarCollapsed ? item.label : ''}
                     >
                       <div className="flex items-center space-x-3">
                         <Icon className="w-5 h-5" />
-                        <span className="font-medium">{item.label}</span>
+                        {!sidebarCollapsed && <span className="font-medium">{item.label}</span>}
                       </div>
-                      {projectsOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                      {!sidebarCollapsed && (projectsOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />)}
                     </button>
                     
-                    {projectsOpen && (
+                    {projectsOpen && !sidebarCollapsed && (
                       <div className="ml-4 mt-2 space-y-1">
                         {item.submenu.map((subItem) => (
                           <button
@@ -161,14 +171,15 @@ const NewAdminLayout = () => {
                     navigate(item.path);
                     setSidebarOpen(false);
                   }}
-                  className={`w-full flex items-center space-x-3 p-4 rounded-2xl transition-all duration-200 ${
+                  className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center p-3' : 'space-x-3 p-4'} rounded-2xl transition-all duration-200 ${
                     isActive(item.path) 
                       ? 'bg-gradient-to-r from-red-600 to-black text-white shadow-lg' 
                       : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
                   }`}
+                  title={sidebarCollapsed ? item.label : ''}
                 >
                   <Icon className="w-5 h-5" />
-                  <span className="font-medium">{item.label}</span>
+                  {!sidebarCollapsed && <span className="font-medium">{item.label}</span>}
                 </button>
               );
             })}
@@ -178,10 +189,11 @@ const NewAdminLayout = () => {
         <div className="px-3 py-4 border-t border-gray-200 flex-shrink-0">
           <button
             onClick={handleLogout}
-            className="w-full flex items-center space-x-3 p-4 rounded-2xl transition-all duration-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+            className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center p-3' : 'space-x-3 p-4'} rounded-2xl transition-all duration-200 text-red-600 hover:bg-red-50 hover:text-red-700`}
+            title={sidebarCollapsed ? 'Logout' : ''}
           >
             <LogOut className="w-5 h-5" />
-            <span className="font-medium">Logout</span>
+            {!sidebarCollapsed && <span className="font-medium">Logout</span>}
           </button>
         </div>
       </div>
@@ -195,6 +207,14 @@ const NewAdminLayout = () => {
               <button
                 onClick={() => setSidebarOpen(true)}
                 className="lg:hidden p-2 rounded-lg hover:bg-gray-100"
+              >
+                <Menu className="w-5 h-5 text-gray-600" />
+              </button>
+              
+              {/* Menu Toggle for Desktop */}
+              <button
+                onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                className="hidden lg:flex p-2 rounded-lg hover:bg-gray-100 transition-colors"
               >
                 <Menu className="w-5 h-5 text-gray-600" />
               </button>

@@ -103,9 +103,6 @@ const AdminLayout = () => {
         <div className="p-3 sm:p-4 lg:p-6 border-b border-gray-200">
           <div className="flex items-center justify-between mb-3 sm:mb-4">
             <div className="flex items-center space-x-2 sm:space-x-3">
-              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-r from-red-600 to-black rounded-xl flex items-center justify-center">
-                <Building2 className="w-4 h-4 sm:w-6 sm:h-6 text-white" />
-              </div>
               <div>
                 <h1 className="text-base sm:text-lg font-bold text-gray-900">SP City</h1>
                 <p className="text-xs text-gray-500">Admin Panel</p>

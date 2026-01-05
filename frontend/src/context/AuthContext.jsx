@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { authAPI } from '../utils/api';
 
 const AuthContext = createContext();
 
@@ -15,44 +16,41 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const token = localStorage.getItem('token');
     const savedUser = localStorage.getItem('user');
-    if (savedUser) {
+    
+    if (token && savedUser) {
       try {
         const userData = JSON.parse(savedUser);
-        // Validate user data structure
-        if (userData.isAuthenticated && userData.role && userData.email) {
-          setUser(userData);
-        } else {
-          // Clear invalid user data
-          localStorage.removeItem('user');
-        }
+        setUser(userData);
       } catch (error) {
-        // Clear corrupted user data
         localStorage.removeItem('user');
+        localStorage.removeItem('token');
       }
     }
     setLoading(false);
   }, []);
 
-  const login = (userData) => {
-    const userWithTimestamp = {
-      ...userData,
-      isAuthenticated: true,
-      loginTime: new Date().toISOString()
-    };
-    setUser(userWithTimestamp);
-    localStorage.setItem('user', JSON.stringify(userWithTimestamp));
+  const login = async (credentials) => {
+    try {
+      const response = await authAPI.login(credentials);
+      if (response.success) {
+        const { token, user: userData } = response.data;
+        localStorage.setItem('token', token);
+        localStorage.setItem('user', JSON.stringify(userData));
+        setUser(userData);
+        return { success: true };
+      }
+      return { success: false, message: response.message };
+    } catch (error) {
+      return { success: false, message: error.message || 'Login failed' };
+    }
   };
 
   const logout = () => {
     setUser(null);
     localStorage.removeItem('user');
-  };
-
-  const hasPermission = (permission) => {
-    if (!user || !user.permissions) return false;
-    if (user.role === 'admin') return true; // Admin has all permissions
-    return user.permissions.includes(permission);
+    localStorage.removeItem('token');
   };
 
   const isAdmin = () => {
@@ -63,21 +61,13 @@ export const AuthProvider = ({ children }) => {
     return user && user.role === 'associate';
   };
 
-  const updateUserProfile = (updatedData) => {
-    const updatedUser = { ...user, ...updatedData };
-    setUser(updatedUser);
-    localStorage.setItem('user', JSON.stringify(updatedUser));
-  };
-
   const value = {
     user,
     login,
     logout,
     loading,
-    hasPermission,
     isAdmin,
-    isAssociate,
-    updateUserProfile
+    isAssociate
   };
 
   return (

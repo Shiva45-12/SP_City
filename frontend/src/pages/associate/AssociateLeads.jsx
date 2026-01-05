@@ -1,108 +1,90 @@
-import React, { useState } from 'react';
-import { 
-  Table, 
-  Thead, 
-  Tbody, 
-  Tr, 
-  Th, 
-  Td, 
-  Button, 
-  Modal, 
-  ModalOverlay, 
-  ModalContent, 
-  ModalHeader, 
-  ModalBody, 
-  ModalCloseButton,
-  FormControl,
-  FormLabel,
-  Input,
-  Select,
-  Textarea,
-  useDisclosure,
-  Tabs,
-  TabList,
-  TabPanels,
-  Tab,
-  TabPanel,
-  Badge,
-  Box,
-  VStack,
-  HStack,
-  Text
-} from '@chakra-ui/react';
-import { Plus, Phone, Mail, Calendar, User, MapPin, Edit, Eye } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Users, Plus, Eye, Phone, Mail, MapPin, Calendar, Filter, Search, Edit, Trash2 } from 'lucide-react';
+import { toast } from 'react-toastify';
+import { leadsAPI, projectsAPI } from '../../utils/api';
+import Swal from 'sweetalert2';
 
 const AssociateLeads = () => {
-  const { isOpen, onOpen, onClose } = useDisclosure();
+  const [activeTab, setActiveTab] = useState('all');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showModal, setShowModal] = useState(false);
+  const [modalType, setModalType] = useState('add');
   const [selectedLead, setSelectedLead] = useState(null);
-  const [modalType, setModalType] = useState('add'); // add, edit, view, followup
-  
-  const [leads, setLeads] = useState([
-    {
-      id: 1,
-      name: 'John Doe',
-      phone: '+91 9876543210',
-      email: 'john@example.com',
-      project: 'SP Heights',
-      status: 'New',
-      source: 'Website',
-      budget: '50-75 Lakhs',
-      createdAt: '2024-01-15',
-      lastFollowup: '2024-01-20',
-      nextFollowup: '2024-01-25',
-      notes: 'Interested in 3BHK apartment'
-    },
-    {
-      id: 2,
-      name: 'Jane Smith',
-      phone: '+91 9876543211',
-      email: 'jane@example.com',
-      project: 'SP Gardens',
-      status: 'Follow Up',
-      source: 'Referral',
-      budget: '75-1 Crore',
-      createdAt: '2024-01-10',
-      lastFollowup: '2024-01-22',
-      nextFollowup: '2024-01-27',
-      notes: 'Looking for ground floor unit'
-    },
-    {
-      id: 3,
-      name: 'Mike Johnson',
-      phone: '+91 9876543212',
-      email: 'mike@example.com',
-      project: 'SP Plaza',
-      status: 'Site Visit',
-      source: 'Walk-in',
-      budget: '1-1.5 Crore',
-      createdAt: '2024-01-05',
-      lastFollowup: '2024-01-23',
-      nextFollowup: '2024-01-28',
-      notes: 'Scheduled site visit for weekend'
-    }
-  ]);
+  const [loading, setLoading] = useState(true);
+  const [leads, setLeads] = useState([]);
+  const [projects, setProjects] = useState([]);
 
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
     email: '',
     project: '',
+    status: 'Pending',
     source: '',
     budget: '',
-    notes: '',
-    nextFollowup: ''
+    notes: ''
   });
 
+  useEffect(() => {
+    fetchLeads();
+    fetchProjects();
+  }, [activeTab, searchTerm]);
+
+  const fetchLeads = async () => {
+    try {
+      setLoading(true);
+      const params = {
+        limit: 100,
+        ...(searchTerm && { search: searchTerm }),
+        ...(activeTab !== 'all' && { status: activeTab })
+      };
+      
+      const response = await leadsAPI.getAll(params);
+      if (response.success) {
+        setLeads(response.data);
+      }
+    } catch (error) {
+      toast.error('Failed to fetch leads');
+      console.error('Error fetching leads:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchProjects = async () => {
+    try {
+      const response = await projectsAPI.getAll();
+      if (response.success) {
+        setProjects(response.data);
+      }
+    } catch (error) {
+      console.error('Error fetching projects:', error);
+    }
+  };
+
+  const tabs = [
+    { key: 'all', label: 'All Leads', count: leads.length },
+    { key: 'Show', label: 'Show', count: leads.filter(l => l.status === 'Show').length },
+    { key: 'Visit', label: 'Visit', count: leads.filter(l => l.status === 'Visit').length },
+    { key: 'Pending', label: 'Pending', count: leads.filter(l => l.status === 'Pending').length },
+    { key: 'Deal Done', label: 'Deal Done', count: leads.filter(l => l.status === 'Deal Done').length }
+  ];
+
   const getStatusColor = (status) => {
-    const colors = {
-      'New': 'blue',
-      'Follow Up': 'yellow',
-      'Site Visit': 'purple',
-      'Negotiation': 'orange',
-      'Deal Done': 'green',
-      'Lost': 'red'
-    };
-    return colors[status] || 'gray';
+    switch (status) {
+      case 'Show': return 'bg-purple-100 text-purple-800';
+      case 'Visit': return 'bg-blue-100 text-blue-800';
+      case 'Pending': return 'bg-yellow-100 text-yellow-800';
+      case 'Deal Done': return 'bg-green-100 text-green-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const handleInputChange = (e) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value
+    });
   };
 
   const handleAddLead = () => {
@@ -112,377 +94,395 @@ const AssociateLeads = () => {
       phone: '',
       email: '',
       project: '',
+      status: 'Pending',
       source: '',
       budget: '',
-      notes: '',
-      nextFollowup: ''
+      notes: ''
     });
-    onOpen();
+    setShowModal(true);
   };
 
   const handleEditLead = (lead) => {
     setModalType('edit');
     setSelectedLead(lead);
-    setFormData(lead);
-    onOpen();
-  };
-
-  const handleViewLead = (lead) => {
-    setModalType('view');
-    setSelectedLead(lead);
-    onOpen();
-  };
-
-  const handleFollowup = (lead) => {
-    setModalType('followup');
-    setSelectedLead(lead);
     setFormData({
-      ...lead,
-      followupNotes: '',
-      nextFollowup: '',
-      status: lead.status
+      name: lead.name,
+      phone: lead.phone,
+      email: lead.email,
+      project: lead.project?._id || '',
+      status: lead.status,
+      source: lead.source,
+      budget: lead.budget,
+      notes: lead.notes || ''
     });
-    onOpen();
+    setShowModal(true);
   };
 
-  const handleSubmit = () => {
-    if (modalType === 'add') {
-      const newLead = {
-        ...formData,
-        id: leads.length + 1,
-        createdAt: new Date().toISOString().split('T')[0],
-        status: 'New'
-      };
-      setLeads([...leads, newLead]);
-    } else if (modalType === 'edit') {
-      setLeads(leads.map(lead => 
-        lead.id === selectedLead.id ? { ...lead, ...formData } : lead
-      ));
-    } else if (modalType === 'followup') {
-      setLeads(leads.map(lead => 
-        lead.id === selectedLead.id 
-          ? { 
-              ...lead, 
-              status: formData.status,
-              lastFollowup: new Date().toISOString().split('T')[0],
-              nextFollowup: formData.nextFollowup,
-              notes: lead.notes + '\n' + formData.followupNotes
-            } 
-          : lead
-      ));
+  const handleDeleteLead = async (id) => {
+    const result = await Swal.fire({
+      title: 'Delete Lead?',
+      text: 'Are you sure you want to delete this lead?',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#dc2626',
+      cancelButtonColor: '#6b7280',
+      confirmButtonText: 'Yes, delete it!',
+      cancelButtonText: 'Cancel'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        await leadsAPI.delete(id);
+        toast.success('Lead deleted successfully!');
+        fetchLeads();
+      } catch (error) {
+        toast.error('Failed to delete lead');
+        console.error('Error deleting lead:', error);
+      }
     }
-    onClose();
   };
 
-  const filterLeadsByStatus = (status) => {
-    if (status === 'all') return leads;
-    return leads.filter(lead => lead.status === status);
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    try {
+      if (modalType === 'add') {
+        await leadsAPI.create(formData);
+        toast.success('Lead added successfully!');
+      } else {
+        await leadsAPI.update(selectedLead._id, formData);
+        toast.success('Lead updated successfully!');
+      }
+
+      setShowModal(false);
+      setFormData({
+        name: '',
+        phone: '',
+        email: '',
+        project: '',
+        status: 'Pending',
+        source: '',
+        budget: '',
+        notes: ''
+      });
+      fetchLeads();
+    } catch (error) {
+      toast.error(`Failed to ${modalType} lead`);
+      console.error(`Error ${modalType}ing lead:`, error);
+    }
   };
+
+  const filteredLeads = leads.filter(lead => {
+    const matchesTab = activeTab === 'all' || lead.status === activeTab;
+    const matchesSearch = lead.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         lead.phone.includes(searchTerm) ||
+                         (lead.project?.name || '').toLowerCase().includes(searchTerm.toLowerCase());
+    return matchesTab && matchesSearch;
+  });
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Lead Management</h1>
-          <p className="text-gray-600 mt-2">Manage your leads and track their progress</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">My Leads</h1>
+          <p className="text-gray-600 mt-2">Manage and track your leads</p>
         </div>
-        <Button
-          leftIcon={<Plus className="w-4 h-4" />}
-          colorScheme=""
-          className="bg-gradient-to-r from-red-600 to-black text-white"
+        <button
           onClick={handleAddLead}
+          className="btn-primary mt-4 sm:mt-0 flex items-center space-x-2 px-4 py-3"
         >
-          Add New Lead
-        </Button>
+          <Plus className="w-5 h-5" />
+          <span>Add New Lead</span>
+        </button>
       </div>
 
+      {/* Tabs */}
       <div className="card">
-        <Tabs>
-          <TabList>
-            <Tab>All Leads ({leads.length})</Tab>
-            <Tab>New ({filterLeadsByStatus('New').length})</Tab>
-            <Tab>Follow Up ({filterLeadsByStatus('Follow Up').length})</Tab>
-            <Tab>Site Visit ({filterLeadsByStatus('Site Visit').length})</Tab>
-            <Tab>Final ({filterLeadsByStatus('Deal Done').length + filterLeadsByStatus('Lost').length})</Tab>
-          </TabList>
+        <div className="flex flex-wrap gap-2 mb-6">
+          {tabs.map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
+                activeTab === tab.key
+                  ? 'bg-gradient-to-r from-red-600 to-black text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {tab.label} ({tab.count})
+            </button>
+          ))}
+        </div>
 
-          <TabPanels>
-            <TabPanel p={0}>
-              <LeadTable 
-                leads={leads} 
-                onEdit={handleEditLead}
-                onView={handleViewLead}
-                onFollowup={handleFollowup}
-                getStatusColor={getStatusColor}
-              />
-            </TabPanel>
-            <TabPanel p={0}>
-              <LeadTable 
-                leads={filterLeadsByStatus('New')} 
-                onEdit={handleEditLead}
-                onView={handleViewLead}
-                onFollowup={handleFollowup}
-                getStatusColor={getStatusColor}
-              />
-            </TabPanel>
-            <TabPanel p={0}>
-              <LeadTable 
-                leads={filterLeadsByStatus('Follow Up')} 
-                onEdit={handleEditLead}
-                onView={handleViewLead}
-                onFollowup={handleFollowup}
-                getStatusColor={getStatusColor}
-              />
-            </TabPanel>
-            <TabPanel p={0}>
-              <LeadTable 
-                leads={filterLeadsByStatus('Site Visit')} 
-                onEdit={handleEditLead}
-                onView={handleViewLead}
-                onFollowup={handleFollowup}
-                getStatusColor={getStatusColor}
-              />
-            </TabPanel>
-            <TabPanel p={0}>
-              <LeadTable 
-                leads={[...filterLeadsByStatus('Deal Done'), ...filterLeadsByStatus('Lost')]} 
-                onEdit={handleEditLead}
-                onView={handleViewLead}
-                onFollowup={handleFollowup}
-                getStatusColor={getStatusColor}
-              />
-            </TabPanel>
-          </TabPanels>
-        </Tabs>
+        {/* Search */}
+        <div className="relative mb-6">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search leads..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500"
+          />
+        </div>
+
+        {/* Leads Table */}
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-gray-200">
+                <th className="text-left py-4 px-2 font-semibold text-gray-900">Lead Details</th>
+                <th className="text-left py-4 px-2 font-semibold text-gray-900">Contact</th>
+                <th className="text-left py-4 px-2 font-semibold text-gray-900">Project</th>
+                <th className="text-left py-4 px-2 font-semibold text-gray-900">Budget</th>
+                <th className="text-left py-4 px-2 font-semibold text-gray-900">Status</th>
+                <th className="text-left py-4 px-2 font-semibold text-gray-900">Date</th>
+                <th className="text-left py-4 px-2 font-semibold text-gray-900">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan="7" className="text-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600 mx-auto"></div>
+                  </td>
+                </tr>
+              ) : filteredLeads.length > 0 ? (
+                filteredLeads.map((lead) => (
+                  <tr key={lead._id} className="border-b border-gray-100 hover:bg-gray-50">
+                    <td className="py-4 px-2">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 bg-gradient-to-r from-red-600 to-black rounded-full flex items-center justify-center">
+                          <Users className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900">{lead.name}</p>
+                          <p className="text-sm text-gray-600">Source: {lead.source}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-4 px-2">
+                      <div className="space-y-1">
+                        <div className="flex items-center space-x-2">
+                          <Phone className="w-4 h-4 text-gray-400" />
+                          <span className="text-sm">{lead.phone}</span>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Mail className="w-4 h-4 text-gray-400" />
+                          <span className="text-sm text-gray-600">{lead.email}</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-4 px-2">
+                      <div className="flex items-center space-x-2">
+                        <MapPin className="w-4 h-4 text-gray-400" />
+                        <span className="font-medium">{lead.project?.name || 'No Project'}</span>
+                      </div>
+                    </td>
+                    <td className="py-4 px-2">
+                      <span className="font-bold text-green-600">₹{lead.budget}</span>
+                    </td>
+                    <td className="py-4 px-2">
+                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(lead.status)}`}>
+                        {lead.status}
+                      </span>
+                    </td>
+                    <td className="py-4 px-2">
+                      <div className="flex items-center space-x-2">
+                        <Calendar className="w-4 h-4 text-gray-400" />
+                        <span className="text-sm text-gray-600">{new Date(lead.createdAt).toLocaleDateString()}</span>
+                      </div>
+                    </td>
+                    <td className="py-4 px-2">
+                      <div className="flex items-center space-x-2">
+                        <button 
+                          onClick={() => handleEditLead(lead)}
+                          className="btn-primary p-2 rounded-lg"
+                          title="Edit Lead"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteLead(lead._id)}
+                          className="btn-primary p-2 rounded-lg"
+                          title="Delete Lead"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="7" className="text-center py-12">
+                    <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No leads found</h3>
+                    <p className="text-gray-600 mb-4">Get started by adding your first lead</p>
+                    <button onClick={handleAddLead} className="btn-primary">
+                      Add Lead
+                    </button>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Modal */}
-      <Modal isOpen={isOpen} onClose={onClose} size="xl">
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>
-            {modalType === 'add' && 'Add New Lead'}
-            {modalType === 'edit' && 'Edit Lead'}
-            {modalType === 'view' && 'Lead Details'}
-            {modalType === 'followup' && 'Follow Up'}
-          </ModalHeader>
-          <ModalCloseButton />
-          <ModalBody pb={6}>
-            {modalType === 'view' ? (
-              <VStack align="start" spacing={4}>
-                <HStack>
-                  <Text fontWeight="bold">Name:</Text>
-                  <Text>{selectedLead?.name}</Text>
-                </HStack>
-                <HStack>
-                  <Text fontWeight="bold">Phone:</Text>
-                  <Text>{selectedLead?.phone}</Text>
-                </HStack>
-                <HStack>
-                  <Text fontWeight="bold">Email:</Text>
-                  <Text>{selectedLead?.email}</Text>
-                </HStack>
-                <HStack>
-                  <Text fontWeight="bold">Project:</Text>
-                  <Text>{selectedLead?.project}</Text>
-                </HStack>
-                <HStack>
-                  <Text fontWeight="bold">Status:</Text>
-                  <Badge colorScheme={getStatusColor(selectedLead?.status)}>
-                    {selectedLead?.status}
-                  </Badge>
-                </HStack>
-                <HStack>
-                  <Text fontWeight="bold">Budget:</Text>
-                  <Text>{selectedLead?.budget}</Text>
-                </HStack>
-                <VStack align="start">
-                  <Text fontWeight="bold">Notes:</Text>
-                  <Text>{selectedLead?.notes}</Text>
-                </VStack>
-              </VStack>
-            ) : (
-              <VStack spacing={4}>
-                {modalType === 'followup' ? (
-                  <>
-                    <FormControl>
-                      <FormLabel>Update Status</FormLabel>
-                      <Select
-                        value={formData.status}
-                        onChange={(e) => setFormData({...formData, status: e.target.value})}
-                      >
-                        <option value="New">New</option>
-                        <option value="Follow Up">Follow Up</option>
-                        <option value="Site Visit">Site Visit</option>
-                        <option value="Negotiation">Negotiation</option>
-                        <option value="Deal Done">Deal Done</option>
-                        <option value="Lost">Lost</option>
-                      </Select>
-                    </FormControl>
-                    <FormControl>
-                      <FormLabel>Follow Up Notes</FormLabel>
-                      <Textarea
-                        value={formData.followupNotes}
-                        onChange={(e) => setFormData({...formData, followupNotes: e.target.value})}
-                        placeholder="Add follow up notes..."
-                      />
-                    </FormControl>
-                    <FormControl>
-                      <FormLabel>Next Follow Up Date</FormLabel>
-                      <Input
-                        type="date"
-                        value={formData.nextFollowup}
-                        onChange={(e) => setFormData({...formData, nextFollowup: e.target.value})}
-                      />
-                    </FormControl>
-                  </>
-                ) : (
-                  <>
-                    <FormControl isRequired>
-                      <FormLabel>Name</FormLabel>
-                      <Input
-                        value={formData.name}
-                        onChange={(e) => setFormData({...formData, name: e.target.value})}
-                        placeholder="Enter full name"
-                      />
-                    </FormControl>
-                    <FormControl isRequired>
-                      <FormLabel>Phone</FormLabel>
-                      <Input
-                        value={formData.phone}
-                        onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                        placeholder="+91 9876543210"
-                      />
-                    </FormControl>
-                    <FormControl>
-                      <FormLabel>Email</FormLabel>
-                      <Input
-                        type="email"
-                        value={formData.email}
-                        onChange={(e) => setFormData({...formData, email: e.target.value})}
-                        placeholder="email@example.com"
-                      />
-                    </FormControl>
-                    <FormControl isRequired>
-                      <FormLabel>Project Interest</FormLabel>
-                      <Select
-                        value={formData.project}
-                        onChange={(e) => setFormData({...formData, project: e.target.value})}
-                      >
-                        <option value="">Select Project</option>
-                        <option value="SP Heights">SP Heights</option>
-                        <option value="SP Gardens">SP Gardens</option>
-                        <option value="SP Plaza">SP Plaza</option>
-                      </Select>
-                    </FormControl>
-                    <FormControl>
-                      <FormLabel>Source</FormLabel>
-                      <Select
-                        value={formData.source}
-                        onChange={(e) => setFormData({...formData, source: e.target.value})}
-                      >
-                        <option value="">Select Source</option>
-                        <option value="Website">Website</option>
-                        <option value="Referral">Referral</option>
-                        <option value="Walk-in">Walk-in</option>
-                        <option value="Social Media">Social Media</option>
-                        <option value="Advertisement">Advertisement</option>
-                      </Select>
-                    </FormControl>
-                    <FormControl>
-                      <FormLabel>Budget Range</FormLabel>
-                      <Select
-                        value={formData.budget}
-                        onChange={(e) => setFormData({...formData, budget: e.target.value})}
-                      >
-                        <option value="">Select Budget</option>
-                        <option value="25-50 Lakhs">25-50 Lakhs</option>
-                        <option value="50-75 Lakhs">50-75 Lakhs</option>
-                        <option value="75-1 Crore">75 Lakhs - 1 Crore</option>
-                        <option value="1-1.5 Crore">1-1.5 Crore</option>
-                        <option value="1.5+ Crore">1.5+ Crore</option>
-                      </Select>
-                    </FormControl>
-                    <FormControl>
-                      <FormLabel>Notes</FormLabel>
-                      <Textarea
-                        value={formData.notes}
-                        onChange={(e) => setFormData({...formData, notes: e.target.value})}
-                        placeholder="Additional notes..."
-                      />
-                    </FormControl>
-                  </>
-                )}
-                <HStack spacing={4} w="full" justify="end">
-                  <Button onClick={onClose}>Cancel</Button>
-                  <Button colorScheme="" className='bg-gradient-to-r from-red-600 to-black text-white' onClick={handleSubmit}>
-                    {modalType === 'add' ? 'Add Lead' : modalType === 'edit' ? 'Update' : 'Save Follow Up'}
-                  </Button>
-                </HStack>
-              </VStack>
-            )}
-          </ModalBody>
-        </ModalContent>
-      </Modal>
+      {showModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-gray-900">
+                  {modalType === 'add' ? 'Add New Lead' : 'Edit Lead'}
+                </h2>
+                <button
+                  onClick={() => setShowModal(false)}
+                  className="p-2 hover:bg-gray-100 rounded-xl transition-colors"
+                >
+                  ×
+                </button>
+              </div>
+
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Full Name *</label>
+                    <input
+                      type="text"
+                      name="name"
+                      value={formData.name}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number *</label>
+                    <input
+                      type="tel"
+                      name="phone"
+                      value={formData.phone}
+                      onChange={handleInputChange}
+                      placeholder="+91 9876543210"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Email *</label>
+                    <input
+                      type="email"
+                      name="email"
+                      value={formData.email}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Project Interest *</label>
+                    <select
+                      name="project"
+                      value={formData.project}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500"
+                      required
+                    >
+                      <option value="">Select Project</option>
+                      {projects.map(project => (
+                        <option key={project._id} value={project._id}>{project.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Budget Range</label>
+                    <input
+                      type="text"
+                      name="budget"
+                      value={formData.budget}
+                      onChange={handleInputChange}
+                      placeholder="e.g., 50L - 1Cr"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Lead Source</label>
+                    <select
+                      name="source"
+                      value={formData.source}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500"
+                    >
+                      <option value="">Select Source</option>
+                      <option value="Website">Website</option>
+                      <option value="Referral">Referral</option>
+                      <option value="Social Media">Social Media</option>
+                      <option value="Walk-in">Walk-in</option>
+                      <option value="Advertisement">Advertisement</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                  <select
+                    name="status"
+                    value={formData.status}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500"
+                  >
+                    <option value="Pending">Pending</option>
+                    <option value="Show">Show</option>
+                    <option value="Visit">Visit</option>
+                    <option value="Deal Done">Deal Done</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Notes</label>
+                  <textarea
+                    name="notes"
+                    value={formData.notes}
+                    onChange={handleInputChange}
+                    rows={3}
+                    placeholder="Additional notes about the lead..."
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500"
+                  />
+                </div>
+
+                <div className="flex space-x-4 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowModal(false)}
+                    className="flex-1 py-3 px-4 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 btn-primary"
+                  >
+                    {modalType === 'add' ? 'Add Lead' : 'Update Lead'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
-
-const LeadTable = ({ leads, onEdit, onView, onFollowup, getStatusColor }) => (
-  <Box overflowX="auto">
-    <Table variant="simple">
-      <Thead>
-        <Tr>
-          <Th>Name</Th>
-          <Th>Contact</Th>
-          <Th>Project</Th>
-          <Th>Status</Th>
-          <Th>Budget</Th>
-          <Th>Next Follow Up</Th>
-          <Th>Actions</Th>
-        </Tr>
-      </Thead>
-      <Tbody>
-        {leads.map((lead) => (
-          <Tr key={lead.id}>
-            <Td>
-              <VStack align="start" spacing={1}>
-                <Text fontWeight="medium">{lead.name}</Text>
-                <Text fontSize="sm" color="gray.500">{lead.source}</Text>
-              </VStack>
-            </Td>
-            <Td>
-              <VStack align="start" spacing={1}>
-                <Text fontSize="sm">{lead.phone}</Text>
-                <Text fontSize="sm" color="gray.500">{lead.email}</Text>
-              </VStack>
-            </Td>
-            <Td>{lead.project}</Td>
-            <Td>
-              <Badge colorScheme={getStatusColor(lead.status)}>
-                {lead.status}
-              </Badge>
-            </Td>
-            <Td>{lead.budget}</Td>
-            <Td>{lead.nextFollowup}</Td>
-            <Td>
-              <HStack spacing={2}>
-                <Button size="sm" variant="ghost" onClick={() => onView(lead)}>
-                  <Eye className="w-4 h-4" />
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => onEdit(lead)}>
-                  <Edit className="w-4 h-4" />
-                </Button>
-                <Button size="sm" colorScheme="blue" onClick={() => onFollowup(lead)}>
-                  Follow Up
-                </Button>
-              </HStack>
-            </Td>
-          </Tr>
-        ))}
-      </Tbody>
-    </Table>
-  </Box>
-);
 
 export default AssociateLeads;

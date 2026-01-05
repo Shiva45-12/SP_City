@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { DollarSign, Plus, Eye, Calendar, User, Building, Search, CheckCircle, Clock, MoreVertical, Filter, Edit, Trash2, Check } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { Pagination, ExportButton, usePagination } from '../utils/tableUtils.jsx';
+import { paymentsAPI, projectsAPI } from '../utils/api';
 import Swal from 'sweetalert2';
 
 const PaymentManagement = () => {
@@ -13,36 +14,63 @@ const PaymentManagement = () => {
   const [showViewModal, setShowViewModal] = useState(false);
   const [viewPayment, setViewPayment] = useState(null);
   const [dropdownOpen, setDropdownOpen] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [payments, setPayments] = useState([]);
+  const [projects, setProjects] = useState([]);
+  const [pagination, setPagination] = useState({ current: 1, pages: 1, total: 0 });
 
   const [formData, setFormData] = useState({
-    clientName: '',
+    customerName: '',
+    customerPhone: '',
     project: '',
     amount: '',
-    type: '',
-    paymentDate: '',
-    dueDate: '',
+    paymentType: '',
     paymentMethod: '',
-    status: 'Pending',
-    transactionId: ''
+    dueDate: '',
+    notes: ''
   });
 
-  const [payments, setPayments] = useState([
-    { id: 1, clientName: 'John Doe', project: 'SP Heights', amount: 500000, type: 'Token Amount', status: 'Received', date: '2025-01-02', dueDate: '2025-01-02', paymentMethod: 'Bank Transfer', transactionId: 'TXN123456789' },
-    { id: 2, clientName: 'Jane Smith', project: 'SP Gardens', amount: 1200000, type: 'Booking Amount', status: 'Pending', date: '2025-01-01', dueDate: '2025-01-05', paymentMethod: 'Cheque', transactionId: '' },
-    { id: 3, clientName: 'Mike Johnson', project: 'SP Plaza', amount: 2500000, type: 'Final Payment', status: 'Received', date: '2024-12-30', dueDate: '2024-12-30', paymentMethod: 'RTGS', transactionId: 'TXN987654321' },
-    { id: 4, clientName: 'Sarah Wilson', project: 'SP Heights', amount: 800000, type: 'Installment', status: 'Pending', date: '2025-01-03', dueDate: '2025-01-10', paymentMethod: 'Bank Transfer', transactionId: '' },
-    { id: 5, clientName: 'David Brown', project: 'SP Gardens', amount: 600000, type: 'Token Amount', status: 'Received', date: '2025-01-04', dueDate: '2025-01-04', paymentMethod: 'RTGS', transactionId: 'TXN456789123' },
-    { id: 6, clientName: 'Lisa Davis', project: 'SP Plaza', amount: 1500000, type: 'Booking Amount', status: 'Pending', date: '2025-01-05', dueDate: '2025-01-08', paymentMethod: 'Bank Transfer', transactionId: '' },
-    { id: 7, clientName: 'Robert Miller', project: 'SP Heights', amount: 900000, type: 'Installment', status: 'Received', date: '2025-01-06', dueDate: '2025-01-06', paymentMethod: 'Cheque', transactionId: 'TXN789123456' },
-    { id: 8, clientName: 'Emily Wilson', project: 'SP Gardens', amount: 3000000, type: 'Final Payment', status: 'Received', date: '2025-01-07', dueDate: '2025-01-07', paymentMethod: 'RTGS', transactionId: 'TXN321654987' },
-    { id: 9, clientName: 'James Taylor', project: 'SP Plaza', amount: 700000, type: 'Token Amount', status: 'Pending', date: '2025-01-08', dueDate: '2025-01-12', paymentMethod: 'Bank Transfer', transactionId: '' },
-    { id: 10, clientName: 'Maria Garcia', project: 'SP Heights', amount: 1100000, type: 'Booking Amount', status: 'Received', date: '2025-01-09', dueDate: '2025-01-09', paymentMethod: 'RTGS', transactionId: 'TXN654987321' },
-    { id: 11, clientName: 'William Anderson', project: 'SP Gardens', amount: 850000, type: 'Installment', status: 'Pending', date: '2025-01-10', dueDate: '2025-01-15', paymentMethod: 'Cheque', transactionId: '' },
-    { id: 12, clientName: 'Jennifer Martinez', project: 'SP Plaza', amount: 950000, type: 'Token Amount', status: 'Received', date: '2025-01-11', dueDate: '2025-01-11', paymentMethod: 'Bank Transfer', transactionId: 'TXN987321654' }
-  ]);
+  useEffect(() => {
+    fetchPayments();
+    fetchProjects();
+  }, [activeTab, searchTerm]);
+
+  const fetchPayments = async (page = 1) => {
+    try {
+      setLoading(true);
+      const params = {
+        page,
+        limit: 10,
+        ...(searchTerm && { search: searchTerm }),
+        ...(activeTab !== 'all' && { status: activeTab })
+      };
+      
+      const response = await paymentsAPI.getAll(params);
+      if (response.success) {
+        setPayments(response.data);
+        setPagination(response.pagination);
+      }
+    } catch (error) {
+      toast.error('Failed to fetch payments');
+      console.error('Error fetching payments:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchProjects = async () => {
+    try {
+      const response = await projectsAPI.getAll();
+      if (response.success) {
+        setProjects(response.data);
+      }
+    } catch (error) {
+      console.error('Error fetching projects:', error);
+    }
+  };
 
   const tabs = [
-    { key: 'all', label: 'All Payments', count: payments.length },
+    { key: 'all', label: 'All Payments', count: pagination.total },
     { key: 'Received', label: 'Received', count: payments.filter(p => p.status === 'Received').length },
     { key: 'Pending', label: 'Pending', count: payments.filter(p => p.status === 'Pending').length }
   ];
@@ -51,31 +79,19 @@ const PaymentManagement = () => {
     switch (status) {
       case 'Received': return 'green';
       case 'Pending': return 'yellow';
-      case 'Overdue': return 'red';
+      case 'Bounced': return 'red';
+      case 'Cancelled': return 'gray';
       default: return 'gray';
     }
   };
 
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case 'Received': return <CheckCircle size={16} />;
-      case 'Pending': return <Clock size={16} />;
-      default: return <Clock size={16} />;
-    }
-  };
-
-  const filteredPayments = payments.filter(payment => {
-    const matchesTab = activeTab === 'all' || payment.status === activeTab;
-    const matchesSearch = payment.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         payment.project.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         payment.transactionId.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesTab && matchesSearch;
-  });
-
-  const { currentPage, totalPages, currentData, goToPage, totalItems } = usePagination(filteredPayments, 10);
-
+  const filteredPayments = payments;
   const totalReceived = payments.filter(p => p.status === 'Received').reduce((sum, p) => sum + p.amount, 0);
   const totalPending = payments.filter(p => p.status === 'Pending').reduce((sum, p) => sum + p.amount, 0);
+
+  const handlePageChange = (page) => {
+    fetchPayments(page);
+  };
 
   const handleViewPayment = (payment) => {
     setViewPayment(payment);
@@ -128,8 +144,14 @@ const PaymentManagement = () => {
     });
 
     if (result.isConfirmed) {
-      setPayments(payments.filter(p => p.id !== id));
-      toast.success('Payment deleted successfully!');
+      try {
+        await paymentsAPI.delete(id);
+        toast.success('Payment deleted successfully!');
+        fetchPayments();
+      } catch (error) {
+        toast.error('Failed to delete payment');
+        console.error('Error deleting payment:', error);
+      }
     }
     setDropdownOpen(null);
   };
@@ -137,7 +159,7 @@ const PaymentManagement = () => {
   const handleMarkReceived = async (payment) => {
     const result = await Swal.fire({
       title: 'Mark as Received?',
-      text: `Mark payment of ₹${payment.amount.toLocaleString()} from ${payment.clientName} as received?`,
+      text: `Mark payment of ₹${payment.amount.toLocaleString()} from ${payment.customerName} as received?`,
       icon: 'question',
       showCancelButton: true,
       confirmButtonColor: '#059669',
@@ -147,12 +169,14 @@ const PaymentManagement = () => {
     });
 
     if (result.isConfirmed) {
-      setPayments(payments.map(p => 
-        p.id === payment.id 
-          ? { ...p, status: 'Received', transactionId: `TXN${Date.now()}` }
-          : p
-      ));
-      toast.success('Payment marked as received!');
+      try {
+        await paymentsAPI.updateStatus(payment._id, 'Received');
+        toast.success('Payment marked as received!');
+        fetchPayments();
+      } catch (error) {
+        toast.error('Failed to update payment status');
+        console.error('Error updating payment status:', error);
+      }
     }
     setDropdownOpen(null);
   };
@@ -168,39 +192,34 @@ const PaymentManagement = () => {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (modalType === 'add') {
-      const newPayment = {
-        ...formData,
-        id: Date.now(),
-        amount: parseInt(formData.amount),
-        date: formData.paymentDate
-      };
-      setPayments([...payments, newPayment]);
-      toast.success(`Payment record for ${formData.clientName} has been added.`);
-    } else {
-      setPayments(payments.map(p => 
-        p.id === selectedPayment.id 
-          ? { ...p, ...formData, amount: parseInt(formData.amount), date: formData.paymentDate }
-          : p
-      ));
-      toast.success(`Payment record for ${formData.clientName} has been updated.`);
+    try {
+      if (modalType === 'add') {
+        await paymentsAPI.create(formData);
+        toast.success(`Payment record for ${formData.customerName} has been added.`);
+      } else {
+        await paymentsAPI.update(selectedPayment._id, formData);
+        toast.success(`Payment record for ${formData.customerName} has been updated.`);
+      }
+      
+      setFormData({
+        customerName: '',
+        customerPhone: '',
+        project: '',
+        amount: '',
+        paymentType: '',
+        paymentMethod: '',
+        dueDate: '',
+        notes: ''
+      });
+      setShowModal(false);
+      fetchPayments();
+    } catch (error) {
+      toast.error(`Failed to ${modalType} payment`);
+      console.error(`Error ${modalType}ing payment:`, error);
     }
-    
-    setFormData({
-      clientName: '',
-      project: '',
-      amount: '',
-      type: '',
-      paymentDate: '',
-      dueDate: '',
-      paymentMethod: '',
-      status: 'Pending',
-      transactionId: ''
-    });
-    setShowModal(false);
   };
 
   return (
@@ -317,161 +336,172 @@ const PaymentManagement = () => {
               </tr>
             </thead>
             <tbody>
-              {currentData.map((payment) => (
-                <tr key={payment.id} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="py-4 px-2">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-gradient-to-r from-red-600 to-black rounded-full flex items-center justify-center">
-                        <span className="text-white text-sm font-medium">{payment.clientName.charAt(0)}</span>
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-900">{payment.clientName}</p>
-                        <div className="flex items-center space-x-1">
-                          <Building className="w-4 h-4 text-gray-400" />
-                          <span className="text-sm text-gray-600">{payment.project}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="py-4 px-2">
-                    <div>
-                      <p className="font-bold text-gray-900">₹{payment.amount.toLocaleString()}</p>
-                      <p className="text-sm text-gray-600">{payment.type}</p>
-                    </div>
-                  </td>
-                  <td className="py-4 px-2">
-                    <div>
-                      <p className="text-sm text-gray-900">{payment.paymentMethod}</p>
-                      {payment.transactionId && (
-                        <p className="text-xs text-gray-500">ID: {payment.transactionId}</p>
-                      )}
-                    </div>
-                  </td>
-                  <td className="py-4 px-2">
-                    <div className="space-y-1">
-                      <div className="flex items-center space-x-1">
-                        <Calendar className="w-4 h-4 text-gray-400" />
-                        <span className="text-sm text-gray-600">Paid: {payment.date}</span>
-                      </div>
-                      <div className="flex items-center space-x-1">
-                        <Calendar className="w-4 h-4 text-gray-400" />
-                        <span className="text-sm text-gray-600">Due: {payment.dueDate}</span>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="py-4 px-2">
-                    <div className="flex items-center space-x-2">
-                      {payment.status === 'Received' ? <CheckCircle className="w-4 h-4 text-green-500" /> : <Clock className="w-4 h-4 text-yellow-500" />}
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        payment.status === 'Received' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                      }`}>
-                        {payment.status}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="py-4 px-2">
-                    <div className="flex items-center space-x-2">
-                      <button 
-                        onClick={() => handleViewPayment(payment)}
-                        className="btn-primary p-2 rounded-lg"
-                        title="View Details"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                      {payment.status === 'Pending' && (
-                        <button 
-                          onClick={() => handleEditPayment(payment)}
-                          className="btn-primary px-3 py-2 rounded-lg text-xs"
-                        >
-                          Edit
-                        </button>
-                      )}
-                      <div className="relative">
-                        <button 
-                          onClick={() => toggleDropdown(payment.id)}
-                          className="btn-primary p-2 rounded-lg"
-                        >
-                          <MoreVertical className="w-4 h-4" />
-                        </button>
-                        
-                        {dropdownOpen === payment.id && (
-                          <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
-                            <div className="py-1">
-                              <button
-                                onClick={() => {
-                                  handleViewPayment(payment);
-                                  setDropdownOpen(null);
-                                }}
-                                className="flex items-center space-x-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                              >
-                                <Eye className="w-4 h-4" />
-                                <span>View Details</span>
-                              </button>
-                              
-                              {payment.status === 'Pending' && (
-                                <>
-                                  <button
-                                    onClick={() => {
-                                      handleEditPayment(payment);
-                                      setDropdownOpen(null);
-                                    }}
-                                    className="flex items-center space-x-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                                  >
-                                    <Edit className="w-4 h-4" />
-                                    <span>Edit Payment</span>
-                                  </button>
-                                  
-                                  <button
-                                    onClick={() => handleMarkReceived(payment)}
-                                    className="flex items-center space-x-2 w-full px-4 py-2 text-sm text-green-700 hover:bg-green-50"
-                                  >
-                                    <Check className="w-4 h-4" />
-                                    <span>Mark as Received</span>
-                                  </button>
-                                </>
-                              )}
-                              
-                              <hr className="my-1" />
-                              
-                              <button
-                                onClick={() => handleDeletePayment(payment.id)}
-                                className="flex items-center space-x-2 w-full px-4 py-2 text-sm text-red-700 hover:bg-red-50"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                                <span>Delete Payment</span>
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
+              {loading ? (
+                <tr>
+                  <td colSpan="6" className="text-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600 mx-auto"></div>
                   </td>
                 </tr>
-              ))}
+              ) : filteredPayments.length > 0 ? (
+                filteredPayments.map((payment) => (
+                  <tr key={payment._id} className="border-b border-gray-100 hover:bg-gray-50">
+                    <td className="py-4 px-2">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 bg-gradient-to-r from-red-600 to-black rounded-full flex items-center justify-center">
+                          <span className="text-white text-sm font-medium">{payment.customerName.charAt(0)}</span>
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900">{payment.customerName}</p>
+                          <div className="flex items-center space-x-1">
+                            <Building className="w-4 h-4 text-gray-400" />
+                            <span className="text-sm text-gray-600">{payment.project?.name || 'No Project'}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-4 px-2">
+                      <div>
+                        <p className="font-bold text-gray-900">₹{payment.amount.toLocaleString()}</p>
+                        <p className="text-sm text-gray-600">{payment.paymentType}</p>
+                      </div>
+                    </td>
+                    <td className="py-4 px-2">
+                      <div>
+                        <p className="text-sm text-gray-900">{payment.paymentMethod}</p>
+                        {payment.transactionId && (
+                          <p className="text-xs text-gray-500">ID: {payment.transactionId}</p>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-4 px-2">
+                      <div className="space-y-1">
+                        <div className="flex items-center space-x-1">
+                          <Calendar className="w-4 h-4 text-gray-400" />
+                          <span className="text-sm text-gray-600">Created: {new Date(payment.createdAt).toLocaleDateString()}</span>
+                        </div>
+                        <div className="flex items-center space-x-1">
+                          <Calendar className="w-4 h-4 text-gray-400" />
+                          <span className="text-sm text-gray-600">Due: {new Date(payment.dueDate).toLocaleDateString()}</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-4 px-2">
+                      <div className="flex items-center space-x-2">
+                        {payment.status === 'Received' ? <CheckCircle className="w-4 h-4 text-green-500" /> : <Clock className="w-4 h-4 text-yellow-500" />}
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                          payment.status === 'Received' ? 'bg-green-100 text-green-800' : 
+                          payment.status === 'Pending' ? 'bg-yellow-100 text-yellow-800' :
+                          payment.status === 'Bounced' ? 'bg-red-100 text-red-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}>
+                          {payment.status}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="py-4 px-2">
+                      <div className="flex items-center space-x-2">
+                        <button 
+                          onClick={() => handleViewPayment(payment)}
+                          className="btn-primary p-2 rounded-lg"
+                          title="View Details"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        {payment.status === 'Pending' && (
+                          <button 
+                            onClick={() => handleEditPayment(payment)}
+                            className="btn-primary px-3 py-2 rounded-lg text-xs"
+                          >
+                            Edit
+                          </button>
+                        )}
+                        <div className="relative">
+                          <button 
+                            onClick={() => toggleDropdown(payment._id)}
+                            className="btn-primary p-2 rounded-lg"
+                          >
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
+                          
+                          {dropdownOpen === payment._id && (
+                            <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
+                              <div className="py-1">
+                                <button
+                                  onClick={() => {
+                                    handleViewPayment(payment);
+                                    setDropdownOpen(null);
+                                  }}
+                                  className="flex items-center space-x-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                  <span>View Details</span>
+                                </button>
+                                
+                                {payment.status === 'Pending' && (
+                                  <>
+                                    <button
+                                      onClick={() => {
+                                        handleEditPayment(payment);
+                                        setDropdownOpen(null);
+                                      }}
+                                      className="flex items-center space-x-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                                    >
+                                      <Edit className="w-4 h-4" />
+                                      <span>Edit Payment</span>
+                                    </button>
+                                    
+                                    <button
+                                      onClick={() => handleMarkReceived(payment)}
+                                      className="flex items-center space-x-2 w-full px-4 py-2 text-sm text-green-700 hover:bg-green-50"
+                                    >
+                                      <Check className="w-4 h-4" />
+                                      <span>Mark as Received</span>
+                                    </button>
+                                  </>
+                                )}
+                                
+                                <hr className="my-1" />
+                                
+                                <button
+                                  onClick={() => handleDeletePayment(payment._id)}
+                                  className="flex items-center space-x-2 w-full px-4 py-2 text-sm text-red-700 hover:bg-red-50"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                  <span>Delete Payment</span>
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="6" className="text-center py-12">
+                    <DollarSign className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No payments found</h3>
+                    <p className="text-gray-600 mb-4">Get started by adding your first payment record</p>
+                    <button onClick={handleAddPayment} className="btn-primary">
+                      Add Payment
+                    </button>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
 
         {/* Pagination */}
-        {totalPages > 1 && (
+        {pagination.pages > 1 && (
           <Pagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            onPageChange={goToPage}
+            currentPage={pagination.current}
+            totalPages={pagination.pages}
+            onPageChange={handlePageChange}
             itemsPerPage={10}
-            totalItems={totalItems}
+            totalItems={pagination.total}
           />
-        )}
-
-        {filteredPayments.length === 0 && (
-          <div className="text-center py-12">
-            <DollarSign className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No payments found</h3>
-            <p className="text-gray-600 mb-4">Get started by adding your first payment record</p>
-            <button onClick={handleAddPayment} className="btn-primary">
-              Add Payment
-            </button>
-          </div>
         )}
       </div>
 
@@ -495,16 +525,30 @@ const PaymentManagement = () => {
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Client Name *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Customer Name *</label>
                     <input
                       type="text"
-                      name="clientName"
-                      value={formData.clientName}
+                      name="customerName"
+                      value={formData.customerName}
                       onChange={handleInputChange}
                       className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500"
                       required
                     />
                   </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Customer Phone *</label>
+                    <input
+                      type="tel"
+                      name="customerPhone"
+                      value={formData.customerPhone}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Project *</label>
                     <select
@@ -515,14 +559,11 @@ const PaymentManagement = () => {
                       required
                     >
                       <option value="">Select Project</option>
-                      <option value="SP Heights">SP Heights</option>
-                      <option value="SP Gardens">SP Gardens</option>
-                      <option value="SP Plaza">SP Plaza</option>
+                      {projects.map(project => (
+                        <option key={project._id} value={project._id}>{project.name}</option>
+                      ))}
                     </select>
                   </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Amount (₹) *</label>
                     <input
@@ -534,50 +575,25 @@ const PaymentManagement = () => {
                       required
                     />
                   </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Payment Type *</label>
                     <select
-                      name="type"
-                      value={formData.type}
+                      name="paymentType"
+                      value={formData.paymentType}
                       onChange={handleInputChange}
                       className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500"
                       required
                     >
                       <option value="">Select Type</option>
-                      <option value="Token Amount">Token Amount</option>
-                      <option value="Booking Amount">Booking Amount</option>
+                      <option value="Booking">Booking</option>
                       <option value="Installment">Installment</option>
-                      <option value="Final Payment">Final Payment</option>
+                      <option value="Final">Final</option>
+                      <option value="Token">Token</option>
                     </select>
                   </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Payment Date *</label>
-                    <input
-                      type="date"
-                      name="paymentDate"
-                      value={formData.paymentDate}
-                      onChange={handleInputChange}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Due Date *</label>
-                    <input
-                      type="date"
-                      name="dueDate"
-                      value={formData.dueDate}
-                      onChange={handleInputChange}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Payment Method *</label>
                     <select
@@ -588,35 +604,35 @@ const PaymentManagement = () => {
                       required
                     >
                       <option value="">Select Method</option>
-                      <option value="Bank Transfer">Bank Transfer</option>
-                      <option value="Cheque">Cheque</option>
-                      <option value="RTGS">RTGS</option>
                       <option value="Cash">Cash</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Status *</label>
-                    <select
-                      name="status"
-                      value={formData.status}
-                      onChange={handleInputChange}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500"
-                      required
-                    >
-                      <option value="Pending">Pending</option>
-                      <option value="Received">Received</option>
+                      <option value="Cheque">Cheque</option>
+                      <option value="Bank Transfer">Bank Transfer</option>
+                      <option value="Online">Online</option>
+                      <option value="Card">Card</option>
                     </select>
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Transaction ID (Optional)</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Due Date *</label>
                   <input
-                    type="text"
-                    name="transactionId"
-                    value={formData.transactionId}
+                    type="date"
+                    name="dueDate"
+                    value={formData.dueDate}
                     onChange={handleInputChange}
-                    placeholder="Enter transaction ID"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Notes (Optional)</label>
+                  <textarea
+                    name="notes"
+                    value={formData.notes}
+                    onChange={handleInputChange}
+                    rows={3}
+                    placeholder="Additional notes..."
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500"
                   />
                 </div>
