@@ -29,7 +29,6 @@ const AssociateLeads = () => {
     fetchLeads();
     fetchProjects();
   }, [activeTab, searchTerm]);
-
   const fetchLeads = async () => {
     try {
       setLoading(true);
