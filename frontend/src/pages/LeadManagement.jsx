@@ -210,14 +210,6 @@ const LeadManagement = () => {
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Lead Management</h1>
           <p className="text-gray-600 mt-2">Manage and track all your leads</p>
         </div>
-        <button
-          onClick={handleAddLead}
-          className="btn-primary mt-4 sm:mt-0 flex items-center space-x-2 px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base"
-        >
-          <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
-          <span className="hidden sm:inline">Add New Lead</span>
-          <span className="sm:hidden">Add Lead</span>
-        </button>
       </div>
 
       {/* Tabs */}
@@ -374,10 +366,7 @@ const LeadManagement = () => {
                   <td colSpan="8" className="text-center py-12">
                     <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                     <h3 className="text-lg font-medium text-gray-900 mb-2">No leads found</h3>
-                    <p className="text-gray-600 mb-4">Get started by adding your first lead</p>
-                    <button onClick={handleAddLead} className="btn-primary">
-                      Add Lead
-                    </button>
+                    <p className="text-gray-600">Leads will be added by associates</p>
                   </td>
                 </tr>
               )}

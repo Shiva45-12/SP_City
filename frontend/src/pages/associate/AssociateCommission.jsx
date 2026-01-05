@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Table, 
   Thead, 
@@ -34,84 +34,75 @@ import {
   StatNumber,
   StatHelpText,
   SimpleGrid,
-  Progress
+  Progress,
+  useToast,
+  Spinner
 } from '@chakra-ui/react';
-import { Plus, DollarSign, TrendingUp, Download, History, Wallet } from 'lucide-react';
+import { Download, TrendingUp } from 'lucide-react';
+import { commissionsAPI } from '../../utils/api';
 
 const AssociateCommission = () => {
   const { isOpen, onOpen, onClose } = useDisclosure();
-  const [modalType, setModalType] = useState('withdraw');
+  const [commissions, setCommissions] = useState([]);
+  const [withdrawals, setWithdrawals] = useState([]);
+  const [stats, setStats] = useState({});
+  const [loading, setLoading] = useState(true);
+  const toast = useToast();
   
-  const [commissions, setCommissions] = useState([
-    {
-      id: 1,
-      clientName: 'John Doe',
-      project: 'SP Heights',
-      unitNumber: 'A-501',
-      saleAmount: 7500000,
-      commissionRate: 2,
-      commissionAmount: 150000,
-      status: 'Earned',
-      earnedDate: '2024-01-15',
-      type: 'Sale Commission'
-    },
-    {
-      id: 2,
-      clientName: 'Jane Smith',
-      project: 'SP Gardens',
-      unitNumber: 'B-203',
-      saleAmount: 5500000,
-      commissionRate: 2,
-      commissionAmount: 110000,
-      status: 'Earned',
-      earnedDate: '2024-01-10',
-      type: 'Sale Commission'
-    },
-    {
-      id: 3,
-      clientName: 'Mike Johnson',
-      project: 'SP Plaza',
-      unitNumber: 'C-1001',
-      saleAmount: 12000000,
-      commissionRate: 2.5,
-      commissionAmount: 300000,
-      status: 'Earned',
-      earnedDate: '2024-01-05',
-      type: 'Premium Sale Commission'
-    }
-  ]);
-
-  const [withdrawals, setWithdrawals] = useState([
-    {
-      id: 1,
-      amount: 100000,
-      date: '2024-01-20',
-      status: 'Completed',
-      method: 'Bank Transfer',
-      reference: 'TXN123456789'
-    },
-    {
-      id: 2,
-      amount: 50000,
-      date: '2024-01-18',
-      status: 'Pending',
-      method: 'Bank Transfer',
-      reference: 'TXN123456788'
-    }
-  ]);
-
   const [formData, setFormData] = useState({
     amount: '',
-    method: '',
+    method: 'Bank Transfer',
     accountDetails: '',
     notes: ''
   });
 
-  // Calculate totals
-  const totalEarned = commissions.reduce((sum, c) => sum + c.commissionAmount, 0);
-  const totalWithdrawn = withdrawals.filter(w => w.status === 'Completed').reduce((sum, w) => sum + w.amount, 0);
-  const pendingWithdrawal = withdrawals.filter(w => w.status === 'Pending').reduce((sum, w) => sum + w.amount, 0);
-  const availableBalance = totalEarned - totalWithdrawn - pendingWithdrawal;
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    try {
+      const [commissionsRes, withdrawalsRes, statsRes] = await Promise.all([
+        commissionsAPI.getAll(),
+        commissionsAPI.getWithdrawals(),
+        commissionsAPI.getStats()
+      ]);
+      
+      setCommissions(commissionsRes.data || []);
+      setWithdrawals(withdrawalsRes.data || []);
+      setStats(statsRes.data || { totalEarned: 50000, totalWithdrawn: 0, pendingWithdrawal: 0, availableBalance: 50000 });
+    } catch (error) {
+      console.error('API Error:', error);
+      // Set demo values for testing when API fails
+      setCommissions([
+        {
+          _id: '1',
+          payment: { customerName: 'John Doe', _id: 'pay123' },
+          project: { name: 'SP Heights' },
+          saleAmount: 1000000,
+          commissionRate: 2,
+          commissionAmount: 20000,
+          status: 'Earned',
+          earnedDate: new Date()
+        },
+        {
+          _id: '2',
+          payment: { customerName: 'Jane Smith', _id: 'pay124' },
+          project: { name: 'SP Gardens' },
+          saleAmount: 1500000,
+          commissionRate: 2,
+          commissionAmount: 30000,
+          status: 'Earned',
+          earnedDate: new Date()
+        }
+      ]);
+      setWithdrawals([]);
+      setStats({ totalEarned: 50000, totalWithdrawn: 0, pendingWithdrawal: 0, availableBalance: 50000 });
+      toast({ title: 'Using demo data', description: 'API connection failed, showing sample data', status: 'warning', duration: 3000 });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-IN', {
@@ -126,13 +117,13 @@ const AssociateCommission = () => {
       'Earned': 'green',
       'Pending': 'yellow',
       'Completed': 'green',
-      'Failed': 'red'
+      'Failed': 'red',
+      'Cancelled': 'gray'
     };
     return colors[status] || 'gray';
   };
 
   const handleWithdraw = () => {
-    setModalType('withdraw');
     setFormData({
       amount: '',
       method: 'Bank Transfer',
@@ -142,21 +133,24 @@ const AssociateCommission = () => {
     onOpen();
   };
 
-  const handleSubmit = () => {
-    if (modalType === 'withdraw') {
-      const newWithdrawal = {
-        id: withdrawals.length + 1,
-        amount: parseFloat(formData.amount),
-        date: new Date().toISOString().split('T')[0],
-        status: 'Pending',
-        method: formData.method,
-        reference: `TXN${Date.now()}`,
-        notes: formData.notes
-      };
-      setWithdrawals([...withdrawals, newWithdrawal]);
+  const handleSubmit = async () => {
+    try {
+      await commissionsAPI.requestWithdrawal(formData);
+      toast({ title: 'Withdrawal request submitted', status: 'success', duration: 3000 });
+      fetchData();
+      onClose();
+    } catch (error) {
+      toast({ title: 'Error', description: error.message, status: 'error', duration: 3000 });
     }
-    onClose();
   };
+
+  if (loading) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" h="400px">
+        <Spinner size="xl" color="red.500" />
+      </Box>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -167,10 +161,9 @@ const AssociateCommission = () => {
         </div>
         <Button
           leftIcon={<Download className="w-4 h-4" />}
-          colorScheme=""
-          className='bg-gradient-to-r from-red-600 to-black text-white'
+          className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
           onClick={handleWithdraw}
-          isDisabled={availableBalance <= 0}
+          isDisabled={stats.availableBalance <= 0}
         >
           Request Withdrawal
         </Button>
@@ -182,7 +175,7 @@ const AssociateCommission = () => {
           <Stat>
             <StatLabel>Total Earned</StatLabel>
             <StatNumber fontSize="2xl" color="green.500">
-              {formatCurrency(totalEarned)}
+              {formatCurrency(stats.totalEarned || 0)}
             </StatNumber>
             <StatHelpText>
               <TrendingUp className="w-4 h-4 inline mr-1" />
@@ -194,7 +187,7 @@ const AssociateCommission = () => {
           <Stat>
             <StatLabel>Total Withdrawn</StatLabel>
             <StatNumber fontSize="2xl" color="blue.500">
-              {formatCurrency(totalWithdrawn)}
+              {formatCurrency(stats.totalWithdrawn || 0)}
             </StatNumber>
             <StatHelpText>Successfully withdrawn</StatHelpText>
           </Stat>
@@ -203,7 +196,7 @@ const AssociateCommission = () => {
           <Stat>
             <StatLabel>Pending Withdrawal</StatLabel>
             <StatNumber fontSize="2xl" color="orange.500">
-              {formatCurrency(pendingWithdrawal)}
+              {formatCurrency(stats.pendingWithdrawal || 0)}
             </StatNumber>
             <StatHelpText>Under processing</StatHelpText>
           </Stat>
@@ -212,7 +205,7 @@ const AssociateCommission = () => {
           <Stat>
             <StatLabel>Available Balance</StatLabel>
             <StatNumber fontSize="2xl" color="purple.500">
-              {formatCurrency(availableBalance)}
+              {formatCurrency(stats.availableBalance || 0)}
             </StatNumber>
             <StatHelpText>Ready to withdraw</StatHelpText>
           </Stat>
@@ -226,10 +219,10 @@ const AssociateCommission = () => {
           <Box w="full">
             <HStack justify="space-between" mb={2}>
               <Text fontSize="sm">Withdrawn</Text>
-              <Text fontSize="sm">{((totalWithdrawn / totalEarned) * 100).toFixed(1)}%</Text>
+              <Text fontSize="sm">{((stats.totalWithdrawn / stats.totalEarned) * 100 || 0).toFixed(1)}%</Text>
             </HStack>
             <Progress 
-              value={(totalWithdrawn / totalEarned) * 100} 
+              value={(stats.totalWithdrawn / stats.totalEarned) * 100 || 0} 
               colorScheme="green" 
               size="lg" 
               borderRadius="md"
@@ -274,7 +267,7 @@ const AssociateCommission = () => {
             <VStack spacing={4}>
               <Box w="full" p={4} bg="blue.50" borderRadius="md">
                 <Text fontSize="sm" color="blue.700">
-                  Available Balance: <strong>{formatCurrency(availableBalance)}</strong>
+                  Available Balance: <strong>{formatCurrency(stats.availableBalance || 0)}</strong>
                 </Text>
               </Box>
               <FormControl isRequired>
@@ -284,7 +277,7 @@ const AssociateCommission = () => {
                   value={formData.amount}
                   onChange={(e) => setFormData({...formData, amount: e.target.value})}
                   placeholder="Enter amount to withdraw"
-                  max={availableBalance}
+                  max={stats.availableBalance}
                 />
               </FormControl>
               <FormControl isRequired>
@@ -317,10 +310,9 @@ const AssociateCommission = () => {
               <HStack spacing={4} w="full" justify="end">
                 <Button onClick={onClose}>Cancel</Button>
                 <Button 
-                  colorScheme="" 
+                  className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
                   onClick={handleSubmit}
-                      className='bg-gradient-to-r from-red-600 to-black text-white'
-                  isDisabled={!formData.amount || parseFloat(formData.amount) > availableBalance}
+                  isDisabled={!formData.amount || !formData.accountDetails || parseFloat(formData.amount) > stats.availableBalance || parseFloat(formData.amount) <= 0}
                 >
                   Request Withdrawal
                 </Button>
@@ -349,14 +341,14 @@ const CommissionTable = ({ commissions, formatCurrency, getStatusColor }) => (
       </Thead>
       <Tbody>
         {commissions.map((commission) => (
-          <Tr key={commission.id}>
+          <Tr key={commission._id}>
             <Td>
               <VStack align="start" spacing={1}>
-                <Text fontWeight="medium">{commission.clientName}</Text>
-                <Text fontSize="sm" color="gray.500">{commission.unitNumber}</Text>
+                <Text fontWeight="medium">{commission.payment?.customerName}</Text>
+                <Text fontSize="sm" color="gray.500">Payment ID: {commission.payment?._id?.slice(-6)}</Text>
               </VStack>
             </Td>
-            <Td>{commission.project}</Td>
+            <Td>{commission.project?.name}</Td>
             <Td>{formatCurrency(commission.saleAmount)}</Td>
             <Td>{commission.commissionRate}%</Td>
             <Td>
@@ -364,7 +356,7 @@ const CommissionTable = ({ commissions, formatCurrency, getStatusColor }) => (
                 {formatCurrency(commission.commissionAmount)}
               </Text>
             </Td>
-            <Td>{commission.earnedDate}</Td>
+            <Td>{new Date(commission.earnedDate).toLocaleDateString()}</Td>
             <Td>
               <Badge colorScheme={getStatusColor(commission.status)}>
                 {commission.status}
@@ -391,11 +383,11 @@ const WithdrawalTable = ({ withdrawals, formatCurrency, getStatusColor }) => (
       </Thead>
       <Tbody>
         {withdrawals.map((withdrawal) => (
-          <Tr key={withdrawal.id}>
+          <Tr key={withdrawal._id}>
             <Td>
               <Text fontWeight="medium">{formatCurrency(withdrawal.amount)}</Text>
             </Td>
-            <Td>{withdrawal.date}</Td>
+            <Td>{new Date(withdrawal.createdAt).toLocaleDateString()}</Td>
             <Td>{withdrawal.method}</Td>
             <Td>
               <Text fontSize="sm" fontFamily="mono">{withdrawal.reference}</Text>
@@ -406,7 +398,7 @@ const WithdrawalTable = ({ withdrawals, formatCurrency, getStatusColor }) => (
               </Badge>
             </Td>
           </Tr>
-        ))}
+        ))}}
       </Tbody>
     </Table>
   </Box>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Building, Plus, Edit, Trash2, Eye, MapPin, Calendar, DollarSign, Users, Search, MoreVertical, Grid, List } from 'lucide-react';
+import { Building, Plus, Edit, Trash2, Eye, MapPin, Calendar, DollarSign, Users, Search, MoreVertical, Grid, List, CheckCircle } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { Pagination, ExportButton, usePagination } from '../utils/tableUtils.jsx';
 import { projectsAPI } from '../utils/api';
@@ -28,7 +28,9 @@ const ProjectManagement = () => {
     startDate: '',
     endDate: '',
     description: '',
-    amenities: []
+    amenities: [],
+    image: null,
+    imagePreview: null
   });
 
   useEffect(() => {
@@ -46,6 +48,10 @@ const ProjectManagement = () => {
       
       const response = await projectsAPI.getAll(params);
       if (response.success) {
+        console.log('📦 Projects fetched:', response.data);
+        response.data.forEach(p => {
+          console.log(`Project: ${p.name}, Image: ${p.image || 'No image'}`);
+        });
         setProjects(response.data);
         setPagination(response.pagination);
       }
@@ -75,27 +81,34 @@ const ProjectManagement = () => {
       location: project.location,
       type: project.type,
       totalUnits: project.totalUnits.toString(),
-      startDate: project.startDate,
-      endDate: project.endDate,
-      priceRange: project.priceRange,
+      availableUnits: project.availableUnits.toString(),
+      pricePerUnit: project.pricePerUnit.toString(),
+      budget: project.budget.toString(),
+      startDate: project.startDate ? new Date(project.startDate).toISOString().split('T')[0] : '',
+      endDate: project.endDate ? new Date(project.endDate).toISOString().split('T')[0] : '',
       description: project.description || '',
+      amenities: project.amenities || [],
       image: null,
-      imagePreview: project.image
+      imagePreview: project.image || null
     });
     setShowModal(true);
   };
 
   const handleAddProject = () => {
     setModalType('add');
+    setSelectedProject(null);
     setFormData({
       name: '',
       location: '',
       type: '',
       totalUnits: '',
+      availableUnits: '',
+      pricePerUnit: '',
+      budget: '',
       startDate: '',
       endDate: '',
-      priceRange: '',
       description: '',
+      amenities: [],
       image: null,
       imagePreview: null
     });
@@ -122,6 +135,65 @@ const ProjectManagement = () => {
       } catch (error) {
         toast.error('Failed to delete project');
         console.error('Error deleting project:', error);
+      }
+    }
+  };
+
+  const handleCompleteProject = async (project) => {
+    const result = await Swal.fire({
+      title: 'Complete Project?',
+      html: `
+        <div class="text-left">
+          <p class="mb-3">Are you sure you want to mark <strong>${project.name}</strong> as completed?</p>
+          <div class="bg-blue-50 p-3 rounded-lg mb-3">
+            <p class="text-sm text-blue-800"><strong>This will:</strong></p>
+            <ul class="text-sm text-blue-700 mt-2 space-y-1">
+              <li>• Generate commissions for all received payments</li>
+              <li>• Mark the project status as 'Completed'</li>
+              <li>• Allow associates to withdraw their commissions</li>
+            </ul>
+          </div>
+          <p class="text-sm text-gray-600">This action cannot be undone.</p>
+        </div>
+      `,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: '#059669',
+      cancelButtonColor: '#6b7280',
+      confirmButtonText: 'Yes, Complete Project!',
+      cancelButtonText: 'Cancel'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        const response = await projectsAPI.completeProject(project._id);
+        toast.success(`${project.name} completed successfully! Commissions have been generated.`);
+        fetchProjects();
+        
+        // Show success details
+        if (response.data?.commissions?.length > 0) {
+          Swal.fire({
+            title: 'Project Completed!',
+            html: `
+              <div class="text-left">
+                <p class="mb-3">✅ <strong>${project.name}</strong> has been marked as completed.</p>
+                <div class="bg-green-50 p-3 rounded-lg">
+                  <p class="text-sm text-green-800"><strong>Generated ${response.data.commissions.length} commission(s):</strong></p>
+                  <ul class="text-sm text-green-700 mt-2">
+                    ${response.data.commissions.map(c => 
+                      `<li>• ₹${c.commissionAmount.toLocaleString()} for ${c.associate?.name || 'Associate'}</li>`
+                    ).join('')}
+                  </ul>
+                </div>
+              </div>
+            `,
+            icon: 'success',
+            confirmButtonText: 'Great!'
+          });
+        }
+      } catch (error) {
+        toast.error('Failed to complete project');
+        console.error('Error completing project:', error);
       }
     }
   };
@@ -157,11 +229,37 @@ const ProjectManagement = () => {
     e.preventDefault();
     
     try {
+      const formDataToSend = new FormData();
+      
+      // Add all text fields
+      formDataToSend.append('name', formData.name);
+      formDataToSend.append('location', formData.location);
+      formDataToSend.append('type', formData.type);
+      formDataToSend.append('totalUnits', formData.totalUnits);
+      formDataToSend.append('availableUnits', formData.availableUnits);
+      formDataToSend.append('pricePerUnit', formData.pricePerUnit);
+      formDataToSend.append('budget', formData.budget);
+      formDataToSend.append('startDate', formData.startDate);
+      if (formData.endDate) formDataToSend.append('endDate', formData.endDate);
+      if (formData.description) formDataToSend.append('description', formData.description);
+      
+      // Add image file if exists
+      if (formData.image) {
+        console.log('🖼️ Image file:', formData.image);
+        formDataToSend.append('image', formData.image);
+      } else {
+        console.log('⚠️ No image selected');
+      }
+      
+      console.log('📤 Sending FormData...');
+      
       if (modalType === 'add') {
-        await projectsAPI.create(formData);
+        const response = await projectsAPI.create(formDataToSend);
+        console.log('✅ Response:', response);
         toast.success(`${formData.name} has been added to projects.`);
       } else {
-        await projectsAPI.update(selectedProject._id, formData);
+        const response = await projectsAPI.update(selectedProject._id, formDataToSend);
+        console.log('✅ Response:', response);
         toast.success(`${formData.name} has been updated.`);
       }
       
@@ -176,13 +274,15 @@ const ProjectManagement = () => {
         startDate: '',
         endDate: '',
         description: '',
-        amenities: []
+        amenities: [],
+        image: null,
+        imagePreview: null
       });
       setShowModal(false);
       fetchProjects();
     } catch (error) {
+      console.error('❌ Error:', error);
       toast.error(`Failed to ${modalType} project`);
-      console.error(`Error ${modalType}ing project:`, error);
     }
   };
 
@@ -261,10 +361,18 @@ const ProjectManagement = () => {
             ) : filteredProjects.length > 0 ? (
               filteredProjects.map((project) => (
                 <div key={project._id} className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-                  <div className="relative h-48 bg-purple-400 overflow-hidden">
-                    <div className="flex items-center justify-center h-full">
-                      <Building className="w-16 h-16 text-white" />
-                    </div>
+                  <div className="relative h-48 bg-gradient-to-br from-purple-400 to-pink-400 overflow-hidden">
+                    {project.image ? (
+                      <img 
+                        src={project.image} 
+                        alt={project.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex items-center justify-center h-full">
+                        <Building className="w-16 h-16 text-white" />
+                      </div>
+                    )}
                     <span className={`absolute top-3 right-3 px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(project.status)}`}>
                       {project.status}
                     </span>
@@ -311,26 +419,41 @@ const ProjectManagement = () => {
                       <span>{new Date(project.startDate).toLocaleDateString()} - {project.endDate ? new Date(project.endDate).toLocaleDateString() : 'Ongoing'}</span>
                     </div>
 
-                    <div className="flex space-x-2 pt-2">
+                    <div className="grid grid-cols-2 gap-2 pt-2">
                       <button 
                         onClick={() => handleViewProject(project)}
-                        className="flex-1 btn-primary flex items-center justify-center space-x-2 text-sm py-2"
+                        className="bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center space-x-1 text-xs py-2 px-3 rounded-lg transition-colors"
                       >
-                        <Eye className="w-4 h-4" />
+                        <Eye className="w-3 h-3" />
                         <span>View</span>
                       </button>
                       <button 
                         onClick={() => handleEditProject(project)}
-                        className="flex-1 btn-primary flex items-center justify-center space-x-2 text-sm py-2"
+                        className="bg-gray-600 hover:bg-gray-700 text-white flex items-center justify-center space-x-1 text-xs py-2 px-3 rounded-lg transition-colors"
                       >
-                        <Edit className="w-4 h-4" />
+                        <Edit className="w-3 h-3" />
                         <span>Edit</span>
                       </button>
+                      {project.status !== 'Completed' ? (
+                        <button 
+                          onClick={() => handleCompleteProject(project)}
+                          className="bg-green-600 hover:bg-green-700 text-white flex items-center justify-center space-x-1 text-xs py-2 px-3 rounded-lg transition-colors col-span-1"
+                          title="Complete Project & Generate Commissions"
+                        >
+                          <CheckCircle className="w-3 h-3" />
+                          <span>Complete</span>
+                        </button>
+                      ) : (
+                        <div className="bg-green-100 text-green-800 flex items-center justify-center space-x-1 text-xs py-2 px-3 rounded-lg col-span-1">
+                          <CheckCircle className="w-3 h-3" />
+                          <span>Completed</span>
+                        </div>
+                      )}
                       <button 
                         onClick={() => handleDeleteProject(project._id)}
-                        className="btn-primary p-2 rounded-lg"
+                        className="bg-red-600 hover:bg-red-700 text-white flex items-center justify-center text-xs py-2 px-3 rounded-lg transition-colors"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-3 h-3" />
                       </button>
                     </div>
                   </div>
@@ -359,93 +482,118 @@ const ProjectManagement = () => {
                   <th className="text-left py-4 px-2 font-semibold text-gray-900">Location</th>
                   <th className="text-left py-4 px-2 font-semibold text-gray-900">Type</th>
                   <th className="text-left py-4 px-2 font-semibold text-gray-900">Units</th>
-                  <th className="text-left py-4 px-2 font-semibold text-gray-900">Price Range</th>
+                  <th className="text-left py-4 px-2 font-semibold text-gray-900">Budget</th>
                   <th className="text-left py-4 px-2 font-semibold text-gray-900">Status</th>
                   <th className="text-left py-4 px-2 font-semibold text-gray-900">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {currentData.map((project) => (
-                  <tr key={project.id} className="border-b border-gray-100 hover:bg-gray-50">
-                    <td className="py-4 px-2">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 bg-purple-500 rounded-lg overflow-hidden">
-                          {project.image ? (
-                            <img 
-                              src={project.image} 
-                              alt={project.name}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <div className="flex items-center justify-center h-full">
-                              <Building className="w-5 h-5 text-white" />
-                            </div>
-                          )}
-                        </div>
-                        <div>
-                          <p className="font-medium text-gray-900">{project.name}</p>
-                          <p className="text-sm text-gray-500">{project.leads} leads</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="py-4 px-2">
-                      <div className="flex items-center space-x-2">
-                        <MapPin className="w-4 h-4 text-gray-400" />
-                        <span className="text-sm">{project.location}</span>
-                      </div>
-                    </td>
-                    <td className="py-4 px-2">
-                      <span className="px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                        {project.type}
-                      </span>
-                    </td>
-                    <td className="py-4 px-2">
-                      <div className="text-center">
-                        <p className="font-bold">{project.soldUnits}/{project.totalUnits}</p>
-                        <p className="text-xs text-gray-500">Sold/Total</p>
-                        <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
-                          <div 
-                            className="bg-green-500 h-2 rounded-full" 
-                            style={{ width: `${(project.soldUnits / project.totalUnits) * 100}%` }}
-                          ></div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="py-4 px-2">
-                      <span className="font-medium">{project.priceRange}</span>
-                    </td>
-                    <td className="py-4 px-2">
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(project.status)}`}>
-                        {project.status}
-                      </span>
-                    </td>
-                    <td className="py-4 px-2">
-                      <div className="flex items-center space-x-2">
-                        <button 
-                          onClick={() => handleViewProject(project)}
-                          className="btn-primary p-2 rounded-lg"
-                          title="View Details"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        <button 
-                          onClick={() => handleEditProject(project)}
-                          className="btn-primary p-2 rounded-lg"
-                          title="Edit Project"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </button>
-                        <button 
-                          onClick={() => handleDeleteProject(project.id)}
-                          className="btn-primary p-2 rounded-lg"
-                          title="Delete Project"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
+                {loading ? (
+                  <tr>
+                    <td colSpan="7" className="text-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600 mx-auto"></div>
                     </td>
                   </tr>
-                ))}
+                ) : filteredProjects.length > 0 ? (
+                  filteredProjects.map((project) => (
+                    <tr key={project._id} className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="py-4 px-2">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-10 h-10 bg-gradient-to-br from-purple-400 to-pink-400 rounded-lg overflow-hidden">
+                            {project.image ? (
+                              <img 
+                                src={project.image} 
+                                alt={project.name}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="flex items-center justify-center h-full">
+                                <Building className="w-5 h-5 text-white" />
+                              </div>
+                            )}
+                          </div>
+                          <div>
+                            <p className="font-medium text-gray-900">{project.name}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-4 px-2">
+                        <div className="flex items-center space-x-2">
+                          <MapPin className="w-4 h-4 text-gray-400" />
+                          <span className="text-sm">{project.location}</span>
+                        </div>
+                      </td>
+                      <td className="py-4 px-2">
+                        <span className="px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          {project.type}
+                        </span>
+                      </td>
+                      <td className="py-4 px-2">
+                        <div>
+                          <p className="font-bold">{project.availableUnits}/{project.totalUnits}</p>
+                          <p className="text-xs text-gray-500">Available/Total</p>
+                        </div>
+                      </td>
+                      <td className="py-4 px-2">
+                        <span className="font-medium">₹{(project.budget / 100000).toFixed(1)}L</span>
+                      </td>
+                      <td className="py-4 px-2">
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(project.status)}`}>
+                          {project.status}
+                        </span>
+                      </td>
+                      <td className="py-4 px-2">
+                        <div className="flex items-center space-x-1">
+                          <button 
+                            onClick={() => handleViewProject(project)}
+                            className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-lg transition-colors"
+                            title="View Details"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button 
+                            onClick={() => handleEditProject(project)}
+                            className="bg-gray-600 hover:bg-gray-700 text-white p-2 rounded-lg transition-colors"
+                            title="Edit Project"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          {project.status !== 'Completed' ? (
+                            <button 
+                              onClick={() => handleCompleteProject(project)}
+                              className="bg-green-600 hover:bg-green-700 text-white p-2 rounded-lg transition-colors"
+                              title="Complete Project & Generate Commissions"
+                            >
+                              <CheckCircle className="w-4 h-4" />
+                            </button>
+                          ) : (
+                            <div className="bg-green-100 text-green-800 p-2 rounded-lg" title="Project Completed">
+                              <CheckCircle className="w-4 h-4" />
+                            </div>
+                          )}
+                          <button 
+                            onClick={() => handleDeleteProject(project._id)}
+                            className="bg-red-600 hover:bg-red-700 text-white p-2 rounded-lg transition-colors"
+                            title="Delete Project"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="7" className="text-center py-12">
+                      <Building className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">No projects found</h3>
+                      <p className="text-gray-600 mb-4">Get started by adding your first project</p>
+                      <button onClick={handleAddProject} className="btn-primary">
+                        Add Project
+                      </button>
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -508,27 +656,50 @@ const ProjectManagement = () => {
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Project Type *</label>
-                    <select
-                      name="type"
-                      value={formData.type}
-                      onChange={handleInputChange}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500"
-                      required
-                    >
-                      <option value="">Select Type</option>
-                      <option value="Residential">Residential</option>
-                      <option value="Commercial">Commercial</option>
-                      <option value="Mixed Use">Mixed Use</option>
-                    </select>
-                  </div>
-                  <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Total Units *</label>
                     <input
                       type="number"
                       name="totalUnits"
                       value={formData.totalUnits}
                       onChange={handleInputChange}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Available Units *</label>
+                    <input
+                      type="number"
+                      name="availableUnits"
+                      value={formData.availableUnits}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Budget (₹) *</label>
+                    <input
+                      type="number"
+                      name="budget"
+                      value={formData.budget}
+                      onChange={handleInputChange}
+                      placeholder="e.g., 50000000"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Price Per Unit (₹) *</label>
+                    <input
+                      type="number"
+                      name="pricePerUnit"
+                      value={formData.pricePerUnit}
+                      onChange={handleInputChange}
+                      placeholder="e.g., 4500000"
                       className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500"
                       required
                     />
@@ -561,15 +732,19 @@ const ProjectManagement = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Price Range</label>
-                  <input
-                    type="text"
-                    name="priceRange"
-                    value={formData.priceRange}
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Project Type *</label>
+                  <select
+                    name="type"
+                    value={formData.type}
                     onChange={handleInputChange}
-                    placeholder="e.g., ₹45L - ₹85L"
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500"
-                  />
+                    required
+                  >
+                    <option value="">Select Type</option>
+                    <option value="Residential">Residential</option>
+                    <option value="Commercial">Commercial</option>
+                    <option value="Industrial">Industrial</option>
+                  </select>
                 </div>
 
                 <div>

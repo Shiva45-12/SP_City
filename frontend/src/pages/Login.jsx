@@ -10,7 +10,7 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
-    email: '',
+    identifier: '',
     password: ''
   });
 
@@ -51,8 +51,19 @@ const Login = () => {
     <div className="min-h-screen bg-gradient-to-br from-red-50 to-gray-100 flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-gradient-to-r from-red-600 to-black rounded-full flex items-center justify-center mx-auto mb-4">
-            <span className="text-white text-2xl font-bold">SP</span>
+          <div className="flex justify-center mb-4">
+            <img 
+              src="/SP City Logo PNG.png" 
+              alt="SP City Logo" 
+              className="h-16 w-auto"
+              onError={(e) => {
+                e.target.style.display = 'none';
+                e.target.nextSibling.style.display = 'flex';
+              }}
+            />
+            <div className="w-16 h-16 bg-gradient-to-r from-red-600 to-black rounded-full items-center justify-center" style={{display: 'none'}}>
+              <span className="text-white text-2xl font-bold">SP</span>
+            </div>
           </div>
           <h1 className="text-2xl font-bold text-gray-900">SP City Admin</h1>
           <p className="text-gray-600 mt-2">Sign in to your account</p>
@@ -61,17 +72,17 @@ const Login = () => {
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Email Address
+              Username or Email
             </label>
             <div className="relative">
               <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
-                type="email"
-                name="email"
-                value={formData.email}
+                type="text"
+                name="identifier"
+                value={formData.identifier}
                 onChange={handleInputChange}
                 className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                placeholder="Enter your email"
+                placeholder="Enter username or email"
                 required
               />
             </div>
@@ -117,22 +128,7 @@ const Login = () => {
             )}
           </button>
         </form>
-
-        <div className="mt-8 text-center">
-          <p className="text-sm text-gray-600">
-            Demo Credentials:
-          </p>
-          <div className="mt-2 space-y-1">
-            <p className="text-xs text-gray-500">Admin: admin@spcity.com / admin123</p>
-            <p className="text-xs text-gray-500">Associate: associate@spcity.com / associate123</p>
-          </div>
-        </div>
-
-        <div className="mt-8 text-center">
-          <p className="text-xs text-gray-500">
-            © 2025 SP City. All rights reserved.
-          </p>
-        </div>
+        
       </div>
     </div>
   );

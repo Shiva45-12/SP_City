@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Table, 
   Thead, 
@@ -28,54 +28,22 @@ import {
   Box,
   VStack,
   HStack,
-  Text
+  Text,
+  useToast,
+  Spinner
 } from '@chakra-ui/react';
-import { Plus, Calendar, MapPin, Clock, User, CheckCircle } from 'lucide-react';
+import { Plus, CheckCircle } from 'lucide-react';
+import { siteVisitsAPI, projectsAPI } from '../../utils/api';
 
 const AssociateSiteVisits = () => {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [selectedVisit, setSelectedVisit] = useState(null);
   const [modalType, setModalType] = useState('schedule');
+  const [visits, setVisits] = useState([]);
+  const [projects, setProjects] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const toast = useToast();
   
-  const [visits, setVisits] = useState([
-    {
-      id: 1,
-      clientName: 'John Doe',
-      clientPhone: '+91 9876543210',
-      project: 'SP Heights',
-      date: '2024-01-28',
-      time: '10:00 AM',
-      status: 'Planned',
-      notes: 'Interested in 3BHK on 5th floor',
-      feedback: '',
-      outcome: ''
-    },
-    {
-      id: 2,
-      clientName: 'Jane Smith',
-      clientPhone: '+91 9876543211',
-      project: 'SP Gardens',
-      date: '2024-01-25',
-      time: '2:00 PM',
-      status: 'Completed',
-      notes: 'Looking for ground floor unit',
-      feedback: 'Very impressed with amenities',
-      outcome: 'Interested to proceed'
-    },
-    {
-      id: 3,
-      clientName: 'Mike Johnson',
-      clientPhone: '+91 9876543212',
-      project: 'SP Plaza',
-      date: '2024-01-30',
-      time: '11:00 AM',
-      status: 'Planned',
-      notes: 'Premium apartment seeker',
-      feedback: '',
-      outcome: ''
-    }
-  ]);
-
   const [formData, setFormData] = useState({
     clientName: '',
     clientPhone: '',
@@ -86,6 +54,31 @@ const AssociateSiteVisits = () => {
     feedback: '',
     outcome: ''
   });
+
+  useEffect(() => {
+    fetchVisits();
+    fetchProjects();
+  }, []);
+
+  const fetchVisits = async () => {
+    try {
+      const response = await siteVisitsAPI.getAll();
+      setVisits(response.data);
+    } catch (error) {
+      toast({ title: 'Error fetching visits', description: error.message, status: 'error', duration: 3000 });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchProjects = async () => {
+    try {
+      const response = await projectsAPI.getAll({ limit: 100 });
+      setProjects(response.data);
+    } catch (error) {
+      console.error('Error fetching projects:', error);
+    }
+  };
 
   const getStatusColor = (status) => {
     return status === 'Planned' ? 'blue' : 'green';
@@ -111,38 +104,44 @@ const AssociateSiteVisits = () => {
     setSelectedVisit(visit);
     setFormData({
       ...visit,
+      project: visit.project._id,
       feedback: '',
       outcome: ''
     });
     onOpen();
   };
 
-  const handleSubmit = () => {
-    if (modalType === 'schedule') {
-      const newVisit = {
-        ...formData,
-        id: visits.length + 1,
-        status: 'Planned'
-      };
-      setVisits([...visits, newVisit]);
-    } else if (modalType === 'complete') {
-      setVisits(visits.map(visit => 
-        visit.id === selectedVisit.id 
-          ? { 
-              ...visit, 
-              status: 'Completed',
-              feedback: formData.feedback,
-              outcome: formData.outcome
-            } 
-          : visit
-      ));
+  const handleSubmit = async () => {
+    try {
+      if (modalType === 'schedule') {
+        await siteVisitsAPI.create(formData);
+        toast({ title: 'Visit scheduled successfully', status: 'success', duration: 3000 });
+      } else {
+        await siteVisitsAPI.update(selectedVisit._id, {
+          status: 'Completed',
+          feedback: formData.feedback,
+          outcome: formData.outcome
+        });
+        toast({ title: 'Visit completed successfully', status: 'success', duration: 3000 });
+      }
+      fetchVisits();
+      onClose();
+    } catch (error) {
+      toast({ title: 'Error', description: error.message, status: 'error', duration: 3000 });
     }
-    onClose();
   };
 
   const filterVisitsByStatus = (status) => {
     return visits.filter(visit => visit.status === status);
   };
+
+  if (loading) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" h="400px">
+        <Spinner size="xl" color="red.500" />
+      </Box>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -229,9 +228,9 @@ const AssociateSiteVisits = () => {
                       onChange={(e) => setFormData({...formData, project: e.target.value})}
                     >
                       <option value="">Select Project</option>
-                      <option value="SP Heights">SP Heights</option>
-                      <option value="SP Gardens">SP Gardens</option>
-                      <option value="SP Plaza">SP Plaza</option>
+                      {projects.map(project => (
+                        <option key={project._id} value={project._id}>{project.name}</option>
+                      ))}
                     </Select>
                   </FormControl>
                   <HStack w="full">
@@ -265,8 +264,8 @@ const AssociateSiteVisits = () => {
                 <>
                   <VStack align="start" w="full" spacing={2}>
                     <Text><strong>Client:</strong> {selectedVisit?.clientName}</Text>
-                    <Text><strong>Project:</strong> {selectedVisit?.project}</Text>
-                    <Text><strong>Date & Time:</strong> {selectedVisit?.date} at {selectedVisit?.time}</Text>
+                    <Text><strong>Project:</strong> {selectedVisit?.project?.name}</Text>
+                    <Text><strong>Date & Time:</strong> {selectedVisit?.date && new Date(selectedVisit.date).toLocaleDateString()} at {selectedVisit?.time}</Text>
                   </VStack>
                   <FormControl isRequired>
                     <FormLabel>Client Feedback</FormLabel>
@@ -321,17 +320,17 @@ const VisitTable = ({ visits, onComplete, getStatusColor }) => (
       </Thead>
       <Tbody>
         {visits.map((visit) => (
-          <Tr key={visit.id}>
+          <Tr key={visit._id}>
             <Td>
               <VStack align="start" spacing={1}>
                 <Text fontWeight="medium">{visit.clientName}</Text>
                 <Text fontSize="sm" color="gray.500">{visit.clientPhone}</Text>
               </VStack>
             </Td>
-            <Td>{visit.project}</Td>
+            <Td>{visit.project?.name}</Td>
             <Td>
               <VStack align="start" spacing={1}>
-                <Text fontSize="sm">{visit.date}</Text>
+                <Text fontSize="sm">{new Date(visit.date).toLocaleDateString()}</Text>
                 <Text fontSize="sm" color="gray.500">{visit.time}</Text>
               </VStack>
             </Td>

@@ -12,14 +12,15 @@ const apiRequest = async (endpoint, options = {}) => {
   
   const config = {
     headers: {
-      'Content-Type': 'application/json',
       ...(token && { Authorization: `Bearer ${token}` }),
       ...options.headers,
     },
     ...options,
   };
 
-  if (config.body && typeof config.body === 'object') {
+  // Only set Content-Type for non-FormData requests
+  if (config.body && !(config.body instanceof FormData)) {
+    config.headers['Content-Type'] = 'application/json';
     config.body = JSON.stringify(config.body);
   }
 
@@ -45,7 +46,7 @@ export const authAPI = {
     body: userData,
   }),
   
-  getProfile: () => apiRequest('/auth/profile'),
+  getProfile: () => apiRequest('/auth/me'),
   
   updateProfile: (profileData) => apiRequest('/auth/profile', {
     method: 'PUT',
@@ -62,6 +63,9 @@ export const authAPI = {
 export const dashboardAPI = {
   getStats: () => apiRequest('/dashboard/stats'),
   getChartData: () => apiRequest('/dashboard/charts'),
+  getLeadsTrend: (period = '180') => apiRequest(`/dashboard/charts/leads-trend?period=${period}`),
+  getRevenueTrend: (period = '180') => apiRequest(`/dashboard/charts/revenue-trend?period=${period}`),
+  getProjectStatus: () => apiRequest('/dashboard/charts/project-status'),
 };
 
 // Associates APIs
@@ -83,6 +87,11 @@ export const associatesAPI = {
     body: associateData,
   }),
   
+  changePassword: (id, passwordData) => apiRequest(`/associates/${id}/password`, {
+    method: 'PUT',
+    body: passwordData,
+  }),
+  
   delete: (id) => apiRequest(`/associates/${id}`, {
     method: 'DELETE',
   }),
@@ -90,6 +99,14 @@ export const associatesAPI = {
   updateStatus: (id, status) => apiRequest(`/associates/${id}/status`, {
     method: 'PUT',
     body: { status },
+  }),
+  
+  // Associate profile APIs
+  getProfile: () => apiRequest('/associates/profile'),
+  
+  updateProfile: (profileData) => apiRequest('/associates/profile', {
+    method: 'PUT',
+    body: profileData,
   }),
 };
 
@@ -154,6 +171,10 @@ export const projectsAPI = {
     method: 'PUT',
     body: { status },
   }),
+  
+  completeProject: (id) => apiRequest(`/projects/${id}/complete`, {
+    method: 'PUT',
+  }),
 };
 
 // Sites APIs
@@ -206,5 +227,59 @@ export const paymentsAPI = {
   updateStatus: (id, status) => apiRequest(`/payments/${id}/status`, {
     method: 'PUT',
     body: { status },
+  }),
+};
+
+// Site Visits APIs
+export const siteVisitsAPI = {
+  getAll: () => apiRequest('/site-visits'),
+  
+  create: (visitData) => apiRequest('/site-visits', {
+    method: 'POST',
+    body: visitData,
+  }),
+  
+  update: (id, visitData) => apiRequest(`/site-visits/${id}`, {
+    method: 'PUT',
+    body: visitData,
+  }),
+  
+  delete: (id) => apiRequest(`/site-visits/${id}`, {
+    method: 'DELETE',
+  }),
+};
+
+// Commission APIs
+export const commissionsAPI = {
+  getAll: () => apiRequest('/commissions'),
+  
+  getStats: () => apiRequest('/commissions/stats'),
+  
+  getWithdrawals: () => apiRequest('/commissions/withdrawals'),
+  
+  requestWithdrawal: (withdrawalData) => apiRequest('/commissions/withdrawals', {
+    method: 'POST',
+    body: withdrawalData,
+  }),
+  
+  // Admin APIs
+  getDashboardStats: () => apiRequest('/commissions/admin/dashboard'),
+  
+  getAllWithdrawals: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return apiRequest(`/commissions/admin/withdrawals${query ? `?${query}` : ''}`);
+  },
+  
+  processWithdrawal: (id, data) => apiRequest(`/commissions/admin/withdrawals/${id}`, {
+    method: 'PUT',
+    body: data,
+  }),
+  
+  generateCommission: (paymentId) => apiRequest(`/commissions/generate/${paymentId}`, {
+    method: 'POST',
+  }),
+  
+  approveProject: (projectId) => apiRequest(`/commissions/approve-project/${projectId}`, {
+    method: 'PUT',
   }),
 };

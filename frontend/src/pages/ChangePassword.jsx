@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { Eye, EyeOff, Shield, Lock, CheckCircle, AlertCircle, Key, Sparkles, Zap } from 'lucide-react';
+import { authAPI } from '../utils/api';
+import { toast } from 'react-toastify';
 
 const ChangePassword = () => {
   const [formData, setFormData] = useState({
@@ -73,15 +75,22 @@ const ChangePassword = () => {
     setIsLoading(true);
     
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      setSuccess(true);
-      setFormData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      const response = await authAPI.changePassword({
+        currentPassword: formData.currentPassword,
+        newPassword: formData.newPassword
+      });
       
-      // Hide success message after 3 seconds
-      setTimeout(() => setSuccess(false), 3000);
+      if (response.success) {
+        setSuccess(true);
+        setFormData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+        toast.success('Password changed successfully!');
+        
+        setTimeout(() => setSuccess(false), 3000);
+      }
     } catch (error) {
-      setErrors({ submit: 'Failed to change password. Please try again.' });
+      const errorMessage = error.message || 'Failed to change password. Please try again.';
+      setErrors({ submit: errorMessage });
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }

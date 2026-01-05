@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Table, 
   Thead, 
@@ -33,78 +33,63 @@ import {
   StatLabel,
   StatNumber,
   StatHelpText,
-  SimpleGrid
+  SimpleGrid,
+  useToast,
+  Spinner
 } from '@chakra-ui/react';
-import { Plus, DollarSign, TrendingUp, Calendar, CreditCard } from 'lucide-react';
+import { Plus } from 'lucide-react';
+import { paymentsAPI, projectsAPI } from '../../utils/api';
 
 const AssociateAmount = () => {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [modalType, setModalType] = useState('add');
+  const [payments, setPayments] = useState([]);
+  const [projects, setProjects] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const toast = useToast();
   
-  const [payments, setPayments] = useState([
-    {
-      id: 1,
-      clientName: 'John Doe',
-      project: 'SP Heights',
-      unitNumber: 'A-501',
-      totalAmount: 7500000,
-      advanceAmount: 1500000,
-      paidAmount: 3000000,
-      pendingAmount: 4500000,
-      emiAmount: 75000,
-      emiDueDate: '2024-02-01',
-      paymentType: 'Advance',
-      status: 'Active',
-      date: '2024-01-15'
-    },
-    {
-      id: 2,
-      clientName: 'Jane Smith',
-      project: 'SP Gardens',
-      unitNumber: 'B-203',
-      totalAmount: 5500000,
-      advanceAmount: 1100000,
-      paidAmount: 2200000,
-      pendingAmount: 3300000,
-      emiAmount: 55000,
-      emiDueDate: '2024-02-05',
-      paymentType: 'EMI',
-      status: 'Active',
-      date: '2024-01-10'
-    },
-    {
-      id: 3,
-      clientName: 'Mike Johnson',
-      project: 'SP Plaza',
-      unitNumber: 'C-1001',
-      totalAmount: 12000000,
-      advanceAmount: 2400000,
-      paidAmount: 12000000,
-      pendingAmount: 0,
-      emiAmount: 0,
-      emiDueDate: '',
-      paymentType: 'Full Payment',
-      status: 'Completed',
-      date: '2024-01-05'
-    }
-  ]);
-
   const [formData, setFormData] = useState({
-    clientName: '',
+    customerName: '',
+    customerPhone: '',
+    customerEmail: '',
     project: '',
-    unitNumber: '',
     amount: '',
     paymentType: '',
+    paymentMethod: '',
+    dueDate: '',
     notes: ''
   });
 
+  useEffect(() => {
+    fetchPayments();
+    fetchProjects();
+  }, []);
+
+  const fetchPayments = async () => {
+    try {
+      const response = await paymentsAPI.getAll({ limit: 100 });
+      setPayments(response.data);
+    } catch (error) {
+      toast({ title: 'Error fetching payments', description: error.message, status: 'error', duration: 3000 });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchProjects = async () => {
+    try {
+      const response = await projectsAPI.getAll({ limit: 100 });
+      setProjects(response.data);
+    } catch (error) {
+      console.error('Error fetching projects:', error);
+    }
+  };
+
   // Calculate totals
   const totals = {
-    totalAmount: payments.reduce((sum, p) => sum + p.totalAmount, 0),
-    advanceAmount: payments.reduce((sum, p) => sum + p.advanceAmount, 0),
-    paidAmount: payments.reduce((sum, p) => sum + p.paidAmount, 0),
-    pendingAmount: payments.reduce((sum, p) => sum + p.pendingAmount, 0),
-    emiAmount: payments.filter(p => p.status === 'Active').reduce((sum, p) => sum + p.emiAmount, 0)
+    totalAmount: payments.reduce((sum, p) => sum + p.amount, 0),
+    receivedAmount: payments.filter(p => p.status === 'Received').reduce((sum, p) => sum + p.amount, 0),
+    pendingAmount: payments.filter(p => p.status === 'Pending').reduce((sum, p) => sum + p.amount, 0)
   };
 
   const formatCurrency = (amount) => {
@@ -116,46 +101,62 @@ const AssociateAmount = () => {
   };
 
   const getStatusColor = (status) => {
-    return status === 'Active' ? 'blue' : 'green';
+    switch (status) {
+      case 'Received': return 'green';
+      case 'Pending': return 'yellow';
+      case 'Bounced': return 'red';
+      case 'Cancelled': return 'gray';
+      default: return 'blue';
+    }
   };
 
   const handleAddPayment = () => {
     setModalType('add');
     setFormData({
-      clientName: '',
+      customerName: '',
+      customerPhone: '',
+      customerEmail: '',
       project: '',
-      unitNumber: '',
       amount: '',
       paymentType: '',
+      paymentMethod: '',
+      dueDate: '',
       notes: ''
     });
     onOpen();
   };
 
-  const handleSubmit = () => {
-    const newPayment = {
-      ...formData,
-      id: payments.length + 1,
-      amount: parseFloat(formData.amount),
-      date: new Date().toISOString().split('T')[0],
-      status: 'Active'
-    };
-    setPayments([...payments, newPayment]);
-    onClose();
+  const handleSubmit = async () => {
+    try {
+      await paymentsAPI.create(formData);
+      toast({ title: 'Payment added successfully', status: 'success', duration: 3000 });
+      fetchPayments();
+      onClose();
+    } catch (error) {
+      toast({ title: 'Error', description: error.message, status: 'error', duration: 3000 });
+    }
   };
 
   const filterPaymentsByType = (type) => {
     switch (type) {
-      case 'advance':
-        return payments.filter(p => p.advanceAmount > 0);
+      case 'received':
+        return payments.filter(p => p.status === 'Received');
       case 'pending':
-        return payments.filter(p => p.pendingAmount > 0);
-      case 'emi':
-        return payments.filter(p => p.emiAmount > 0 && p.status === 'Active');
+        return payments.filter(p => p.status === 'Pending');
+      case 'booking':
+        return payments.filter(p => p.paymentType === 'Booking');
       default:
         return payments;
     }
   };
+
+  if (loading) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" h="400px">
+        <Spinner size="xl" color="red.500" />
+      </Box>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -175,32 +176,23 @@ const AssociateAmount = () => {
       </div>
 
       {/* Summary Cards */}
-      <SimpleGrid columns={{ base: 1, md: 2, lg: 5 }} spacing={6}>
+      <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
         <Box className="card">
           <Stat>
             <StatLabel>Total Amount</StatLabel>
             <StatNumber fontSize="2xl" color="purple.500">
               {formatCurrency(totals.totalAmount)}
             </StatNumber>
-            <StatHelpText>All projects combined</StatHelpText>
+            <StatHelpText>All payments</StatHelpText>
           </Stat>
         </Box>
         <Box className="card">
           <Stat>
-            <StatLabel>Advance Received</StatLabel>
+            <StatLabel>Received Amount</StatLabel>
             <StatNumber fontSize="2xl" color="green.500">
-              {formatCurrency(totals.advanceAmount)}
+              {formatCurrency(totals.receivedAmount)}
             </StatNumber>
-            <StatHelpText>Initial payments</StatHelpText>
-          </Stat>
-        </Box>
-        <Box className="card">
-          <Stat>
-            <StatLabel>Total Paid</StatLabel>
-            <StatNumber fontSize="2xl" color="blue.500">
-              {formatCurrency(totals.paidAmount)}
-            </StatNumber>
-            <StatHelpText>Received so far</StatHelpText>
+            <StatHelpText>Completed payments</StatHelpText>
           </Stat>
         </Box>
         <Box className="card">
@@ -212,24 +204,15 @@ const AssociateAmount = () => {
             <StatHelpText>Outstanding balance</StatHelpText>
           </Stat>
         </Box>
-        <Box className="card">
-          <Stat>
-            <StatLabel>Monthly EMI</StatLabel>
-            <StatNumber fontSize="2xl" color="red.500">
-              {formatCurrency(totals.emiAmount)}
-            </StatNumber>
-            <StatHelpText>Active EMIs</StatHelpText>
-          </Stat>
-        </Box>
       </SimpleGrid>
 
       <div className="card">
         <Tabs>
           <TabList>
             <Tab>All Payments ({payments.length})</Tab>
-            <Tab>Advance ({filterPaymentsByType('advance').length})</Tab>
+            <Tab>Received ({filterPaymentsByType('received').length})</Tab>
             <Tab>Pending ({filterPaymentsByType('pending').length})</Tab>
-            <Tab>EMI ({filterPaymentsByType('emi').length})</Tab>
+            <Tab>Booking ({filterPaymentsByType('booking').length})</Tab>
           </TabList>
 
           <TabPanels>
@@ -242,7 +225,7 @@ const AssociateAmount = () => {
             </TabPanel>
             <TabPanel p={0}>
               <PaymentTable 
-                payments={filterPaymentsByType('advance')} 
+                payments={filterPaymentsByType('received')} 
                 formatCurrency={formatCurrency}
                 getStatusColor={getStatusColor}
               />
@@ -256,7 +239,7 @@ const AssociateAmount = () => {
             </TabPanel>
             <TabPanel p={0}>
               <PaymentTable 
-                payments={filterPaymentsByType('emi')} 
+                payments={filterPaymentsByType('booking')} 
                 formatCurrency={formatCurrency}
                 getStatusColor={getStatusColor}
               />
@@ -274,13 +257,32 @@ const AssociateAmount = () => {
           <ModalBody pb={6}>
             <VStack spacing={4}>
               <FormControl isRequired>
-                <FormLabel>Client Name</FormLabel>
+                <FormLabel>Customer Name</FormLabel>
                 <Input
-                  value={formData.clientName}
-                  onChange={(e) => setFormData({...formData, clientName: e.target.value})}
-                  placeholder="Enter client name"
+                  value={formData.customerName}
+                  onChange={(e) => setFormData({...formData, customerName: e.target.value})}
+                  placeholder="Enter customer name"
                 />
               </FormControl>
+              <HStack w="full">
+                <FormControl isRequired>
+                  <FormLabel>Phone</FormLabel>
+                  <Input
+                    value={formData.customerPhone}
+                    onChange={(e) => setFormData({...formData, customerPhone: e.target.value})}
+                    placeholder="+91 9876543210"
+                  />
+                </FormControl>
+                <FormControl>
+                  <FormLabel>Email</FormLabel>
+                  <Input
+                    type="email"
+                    value={formData.customerEmail}
+                    onChange={(e) => setFormData({...formData, customerEmail: e.target.value})}
+                    placeholder="email@example.com"
+                  />
+                </FormControl>
+              </HStack>
               <FormControl isRequired>
                 <FormLabel>Project</FormLabel>
                 <Select
@@ -288,41 +290,59 @@ const AssociateAmount = () => {
                   onChange={(e) => setFormData({...formData, project: e.target.value})}
                 >
                   <option value="">Select Project</option>
-                  <option value="SP Heights">SP Heights</option>
-                  <option value="SP Gardens">SP Gardens</option>
-                  <option value="SP Plaza">SP Plaza</option>
+                  {projects.map(project => (
+                    <option key={project._id} value={project._id}>{project.name}</option>
+                  ))}
                 </Select>
               </FormControl>
-              <FormControl isRequired>
-                <FormLabel>Unit Number</FormLabel>
-                <Input
-                  value={formData.unitNumber}
-                  onChange={(e) => setFormData({...formData, unitNumber: e.target.value})}
-                  placeholder="e.g., A-501"
-                />
-              </FormControl>
-              <FormControl isRequired>
-                <FormLabel>Amount</FormLabel>
-                <Input
-                  type="number"
-                  value={formData.amount}
-                  onChange={(e) => setFormData({...formData, amount: e.target.value})}
-                  placeholder="Enter amount"
-                />
-              </FormControl>
-              <FormControl isRequired>
-                <FormLabel>Payment Type</FormLabel>
-                <Select
-                  value={formData.paymentType}
-                  onChange={(e) => setFormData({...formData, paymentType: e.target.value})}
-                >
-                  <option value="">Select Type</option>
-                  <option value="Advance">Advance</option>
-                  <option value="EMI">EMI</option>
-                  <option value="Partial Payment">Partial Payment</option>
-                  <option value="Full Payment">Full Payment</option>
-                </Select>
-              </FormControl>
+              <HStack w="full">
+                <FormControl isRequired>
+                  <FormLabel>Amount</FormLabel>
+                  <Input
+                    type="number"
+                    value={formData.amount}
+                    onChange={(e) => setFormData({...formData, amount: e.target.value})}
+                    placeholder="Enter amount"
+                  />
+                </FormControl>
+                <FormControl isRequired>
+                  <FormLabel>Due Date</FormLabel>
+                  <Input
+                    type="date"
+                    value={formData.dueDate}
+                    onChange={(e) => setFormData({...formData, dueDate: e.target.value})}
+                  />
+                </FormControl>
+              </HStack>
+              <HStack w="full">
+                <FormControl isRequired>
+                  <FormLabel>Payment Type</FormLabel>
+                  <Select
+                    value={formData.paymentType}
+                    onChange={(e) => setFormData({...formData, paymentType: e.target.value})}
+                  >
+                    <option value="">Select Type</option>
+                    <option value="Booking">Booking</option>
+                    <option value="Installment">Installment</option>
+                    <option value="Final">Final</option>
+                    <option value="Token">Token</option>
+                  </Select>
+                </FormControl>
+                <FormControl isRequired>
+                  <FormLabel>Payment Method</FormLabel>
+                  <Select
+                    value={formData.paymentMethod}
+                    onChange={(e) => setFormData({...formData, paymentMethod: e.target.value})}
+                  >
+                    <option value="">Select Method</option>
+                    <option value="Cash">Cash</option>
+                    <option value="Cheque">Cheque</option>
+                    <option value="Bank Transfer">Bank Transfer</option>
+                    <option value="Online">Online</option>
+                    <option value="Card">Card</option>
+                  </Select>
+                </FormControl>
+              </HStack>
               <FormControl>
                 <FormLabel>Notes</FormLabel>
                 <Textarea
@@ -350,48 +370,34 @@ const PaymentTable = ({ payments, formatCurrency, getStatusColor }) => (
     <Table variant="simple">
       <Thead>
         <Tr>
-          <Th>Client & Unit</Th>
+          <Th>Customer</Th>
           <Th>Project</Th>
-          <Th>Total Amount</Th>
-          <Th>Paid Amount</Th>
-          <Th>Pending Amount</Th>
-          <Th>EMI</Th>
+          <Th>Amount</Th>
+          <Th>Payment Type</Th>
+          <Th>Payment Method</Th>
+          <Th>Due Date</Th>
           <Th>Status</Th>
         </Tr>
       </Thead>
       <Tbody>
         {payments.map((payment) => (
-          <Tr key={payment.id}>
+          <Tr key={payment._id}>
             <Td>
               <VStack align="start" spacing={1}>
-                <Text fontWeight="medium">{payment.clientName}</Text>
-                <Text fontSize="sm" color="gray.500">{payment.unitNumber}</Text>
+                <Text fontWeight="medium">{payment.customerName}</Text>
+                <Text fontSize="sm" color="gray.500">{payment.customerPhone}</Text>
               </VStack>
             </Td>
-            <Td>{payment.project}</Td>
+            <Td>{payment.project?.name}</Td>
             <Td>
-              <Text fontWeight="medium">{formatCurrency(payment.totalAmount)}</Text>
+              <Text fontWeight="medium" color="green.600">{formatCurrency(payment.amount)}</Text>
             </Td>
             <Td>
-              <VStack align="start" spacing={1}>
-                <Text color="green.600">{formatCurrency(payment.paidAmount)}</Text>
-                <Text fontSize="xs" color="gray.500">
-                  Advance: {formatCurrency(payment.advanceAmount)}
-                </Text>
-              </VStack>
+              <Badge colorScheme="purple">{payment.paymentType}</Badge>
             </Td>
+            <Td>{payment.paymentMethod}</Td>
             <Td>
-              <Text color="orange.600">{formatCurrency(payment.pendingAmount)}</Text>
-            </Td>
-            <Td>
-              {payment.emiAmount > 0 ? (
-                <VStack align="start" spacing={1}>
-                  <Text>{formatCurrency(payment.emiAmount)}</Text>
-                  <Text fontSize="xs" color="gray.500">Due: {payment.emiDueDate}</Text>
-                </VStack>
-              ) : (
-                <Text color="gray.400">-</Text>
-              )}
+              <Text fontSize="sm">{new Date(payment.dueDate).toLocaleDateString()}</Text>
             </Td>
             <Td>
               <Badge colorScheme={getStatusColor(payment.status)}>

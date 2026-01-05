@@ -1,27 +1,25 @@
-import React, { useState } from 'react';
-import { Users, Plus, Edit, Trash2, Eye, Phone, Mail, Calendar, Search, Key, Shield, UserCheck } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import {
+  Users, Plus, Edit, Trash2, Eye, Phone, Mail,
+  Calendar, Search, Key, Shield, UserCheck, EyeOff
+} from 'lucide-react';
 import { toast } from 'react-toastify';
-import { Pagination, ExportButton, usePagination } from '../utils/tableUtils.jsx';
 import Swal from 'sweetalert2';
+import { Pagination, ExportButton, usePagination } from '../utils/tableUtils.jsx';
+import { associatesAPI } from '../utils/api'; 
 
 const AssociateManagement = () => {
+
   const [searchTerm, setSearchTerm] = useState('');
+  const [associates, setAssociates] = useState([]);
+  const [loading, setLoading] = useState(false);
+
   const [modalType, setModalType] = useState('add');
   const [selectedAssociate, setSelectedAssociate] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [viewAssociate, setViewAssociate] = useState(null);
-
-  const [formData, setFormData] = useState({
-    name: '',
-    phone: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
-    role: '',
-    department: '',
-    permissions: []
-  });
+  const [showPassword, setShowPassword] = useState(false);
 
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passwordData, setPasswordData] = useState({
@@ -30,20 +28,17 @@ const AssociateManagement = () => {
     confirmPassword: ''
   });
 
-  const [associates, setAssociates] = useState([
-    { id: 1, name: 'Rajesh Kumar', phone: '+91 9876543210', email: 'rajesh@spcity.com', role: 'Sales Manager', joinDate: '2024-01-15', leads: 45, deals: 12, status: 'Active', department: 'Sales', permissions: ['leads', 'projects', 'reports'], createdBy: 'Admin' },
-    { id: 2, name: 'Priya Sharma', phone: '+91 9876543211', email: 'priya@spcity.com', role: 'Sales Executive', joinDate: '2024-03-20', leads: 32, deals: 8, status: 'Active', department: 'Sales', permissions: ['leads'], createdBy: 'Admin' },
-    { id: 3, name: 'Amit Singh', phone: '+91 9876543212', email: 'amit@spcity.com', role: 'Team Lead', joinDate: '2023-11-10', leads: 67, deals: 18, status: 'Active', department: 'Sales', permissions: ['leads', 'projects'], createdBy: 'Admin' },
-    { id: 4, name: 'Neha Gupta', phone: '+91 9876543213', email: 'neha@spcity.com', role: 'Sales Executive', joinDate: '2024-02-10', leads: 28, deals: 6, status: 'Active', department: 'Sales', permissions: ['leads'], createdBy: 'Admin' },
-    { id: 5, name: 'Vikram Patel', phone: '+91 9876543214', email: 'vikram@spcity.com', role: 'Sales Manager', joinDate: '2023-12-05', leads: 52, deals: 15, status: 'Active', department: 'Sales', permissions: ['leads', 'projects', 'reports'], createdBy: 'Admin' },
-    { id: 6, name: 'Anita Rao', phone: '+91 9876543215', email: 'anita@spcity.com', role: 'Team Lead', joinDate: '2024-01-25', leads: 41, deals: 11, status: 'Active', department: 'Sales', permissions: ['leads', 'projects'], createdBy: 'Admin' },
-    { id: 7, name: 'Suresh Reddy', phone: '+91 9876543216', email: 'suresh@spcity.com', role: 'Sales Executive', joinDate: '2024-04-12', leads: 19, deals: 4, status: 'Active', department: 'Sales', permissions: ['leads'], createdBy: 'Admin' },
-    { id: 8, name: 'Kavita Joshi', phone: '+91 9876543217', email: 'kavita@spcity.com', role: 'Sales Manager', joinDate: '2023-10-18', leads: 63, deals: 20, status: 'Active', department: 'Sales', permissions: ['leads', 'projects', 'reports'], createdBy: 'Admin' },
-    { id: 9, name: 'Ravi Kumar', phone: '+91 9876543218', email: 'ravi@spcity.com', role: 'Sales Executive', joinDate: '2024-03-08', leads: 35, deals: 9, status: 'Active', department: 'Sales', permissions: ['leads'], createdBy: 'Admin' },
-    { id: 10, name: 'Deepika Singh', phone: '+91 9876543219', email: 'deepika@spcity.com', role: 'Team Lead', joinDate: '2024-01-30', leads: 48, deals: 13, status: 'Active', department: 'Sales', permissions: ['leads', 'projects'], createdBy: 'Admin' },
-    { id: 11, name: 'Manoj Verma', phone: '+91 9876543220', email: 'manoj@spcity.com', role: 'Sales Executive', joinDate: '2024-05-15', leads: 22, deals: 5, status: 'Active', department: 'Sales', permissions: ['leads'], createdBy: 'Admin' },
-    { id: 12, name: 'Sunita Agarwal', phone: '+91 9876543221', email: 'sunita@spcity.com', role: 'Sales Manager', joinDate: '2023-09-22', leads: 58, deals: 17, status: 'Active', department: 'Sales', permissions: ['leads', 'projects', 'reports'], createdBy: 'Admin' }
-  ]);
+  const [formData, setFormData] = useState({
+    name: '',
+    phone: '',
+    email: '',
+    username: '',
+    password: '',
+    confirmPassword: '',
+    role: '',
+    department: '',
+    permissions: []
+  });
 
   const rolePermissions = {
     'Sales Executive': ['leads'],
@@ -52,32 +47,69 @@ const AssociateManagement = () => {
   };
 
   const permissionLabels = {
-    'leads': 'Lead Management',
-    'projects': 'Project Management', 
-    'reports': 'Reports & Analytics'
+    leads: 'Lead Management',
+    projects: 'Project Management',
+    reports: 'Reports & Analytics'
   };
 
-  const filteredAssociates = associates.filter(associate =>
-    associate.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    associate.phone.includes(searchTerm) ||
-    associate.role.toLowerCase().includes(searchTerm.toLowerCase())
+  // ================= FETCH ASSOCIATES =================
+  const fetchAssociates = async () => {
+    try {
+      setLoading(true);
+      const res = await associatesAPI.getAll();
+      setAssociates(res.data || res);
+    } catch (err) {
+      toast.error(err.message || 'Failed to load associates');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAssociates();
+  }, []);
+
+  // ================= FILTER + PAGINATION =================
+  const filteredAssociates = associates.filter(a =>
+    a.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    a.phone?.includes(searchTerm) ||
+    a.role?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const { currentPage, totalPages, currentData, goToPage, totalItems } = usePagination(filteredAssociates, 10);
+  const { currentPage, totalPages, currentData, goToPage, totalItems } =
+    usePagination(filteredAssociates, 10);
 
+  // ================= HANDLERS =================
   const handleInputChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleRoleChange = (e) => {
+    const role = e.target.value;
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value
+      role,
+      permissions: rolePermissions[role] || []
     });
+  };
+
+  const handlePermissionChange = (permission) => {
+    setFormData(prev => ({
+      ...prev,
+      permissions: prev.permissions.includes(permission)
+        ? prev.permissions.filter(p => p !== permission)
+        : [...prev.permissions, permission]
+    }));
   };
 
   const handleAddAssociate = () => {
     setModalType('add');
+    setSelectedAssociate(null);
     setFormData({
       name: '',
       phone: '',
       email: '',
+      username: '',
       password: '',
       confirmPassword: '',
       role: '',
@@ -85,11 +117,6 @@ const AssociateManagement = () => {
       permissions: []
     });
     setShowModal(true);
-  };
-
-  const handleViewAssociate = (associate) => {
-    setViewAssociate(associate);
-    setShowViewModal(true);
   };
 
   const handleEditAssociate = (associate) => {
@@ -99,6 +126,7 @@ const AssociateManagement = () => {
       name: associate.name,
       phone: associate.phone,
       email: associate.email,
+      username: associate.username,
       password: '',
       confirmPassword: '',
       role: associate.role,
@@ -108,180 +136,122 @@ const AssociateManagement = () => {
     setShowModal(true);
   };
 
-  const handleChangePassword = (associate) => {
-    setPasswordData({
-      associateId: associate.id,
-      newPassword: '',
-      confirmPassword: ''
-    });
-    setShowPasswordModal(true);
+  const handleViewAssociate = (associate) => {
+    setViewAssociate(associate);
+    setShowPassword(false);
+    setShowViewModal(true);
   };
 
-  const handlePasswordSubmit = async (e) => {
+  // ================= ADD / UPDATE =================
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    if (passwordData.newPassword !== passwordData.confirmPassword) {
-      toast.error('Passwords do not match!');
-      return;
-    }
 
-    if (passwordData.newPassword.length < 6) {
-      toast.error('Password must be at least 6 characters long!');
-      return;
-    }
+    try {
+      if (modalType === 'add') {
+        if (formData.password !== formData.confirmPassword) {
+          return toast.error('Passwords do not match');
+        }
 
-    const result = await Swal.fire({
-      title: 'Change Password?',
-      text: 'Are you sure you want to change this associate\'s password?',
-      icon: 'question',
-      showCancelButton: true,
-      confirmButtonColor: '#dc2626',
-      cancelButtonColor: '#6b7280',
-      confirmButtonText: 'Yes, change it!',
-      cancelButtonText: 'Cancel'
-    });
+        const response = await associatesAPI.create(formData);
+        if (response.success) {
+          toast.success('Associate added successfully');
+          // Show the newly created associate with password
+          if (response.data) {
+            setViewAssociate(response.data);
+            setShowViewModal(true);
+          }
+        }
+      } else {
+        const updateData = { 
+          name: formData.name,
+          phone: formData.phone,
+          email: formData.email,
+          role: formData.role,
+          department: formData.department,
+          permissions: formData.permissions
+        };
 
-    if (result.isConfirmed) {
-      // Here you would typically make an API call to update password
-      toast.success('Password changed successfully!');
-      setShowPasswordModal(false);
-      setPasswordData({ associateId: null, newPassword: '', confirmPassword: '' });
+        // Remove empty fields
+        Object.keys(updateData).forEach(key => {
+          if (updateData[key] === '' || updateData[key] === null || updateData[key] === undefined) {
+            delete updateData[key];
+          }
+        });
+
+        await associatesAPI.update(selectedAssociate._id || selectedAssociate.id, updateData);
+        toast.success('Associate updated successfully');
+      }
+
+      setShowModal(false);
+      fetchAssociates();
+
+    } catch (err) {
+      console.error('Associate operation error:', err);
+      const errorMessage = err.response?.data?.message || err.message || 'Operation failed';
+      toast.error(errorMessage);
     }
   };
 
+  // ================= DELETE =================
   const handleDeleteAssociate = async (id) => {
     const result = await Swal.fire({
       title: 'Delete Associate?',
-      text: 'Are you sure you want to delete this associate? This action cannot be undone.',
+      text: 'This action cannot be undone!',
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: '#dc2626',
       cancelButtonColor: '#6b7280',
-      confirmButtonText: 'Yes, delete it!',
-      cancelButtonText: 'Cancel'
+      confirmButtonText: 'Yes, delete'
     });
 
     if (result.isConfirmed) {
-      setAssociates(associates.filter(a => a.id !== id));
-      toast.success('Associate deleted successfully!');
+      try {
+        await associatesAPI.delete(id);
+        toast.success('Associate deleted');
+        fetchAssociates();
+      } catch (err) {
+        toast.error(err.message);
+      }
     }
   };
 
-  const handleSubmit = (e) => {
+  // ================= CHANGE PASSWORD =================
+  const handlePasswordSubmit = async (e) => {
     e.preventDefault();
-    
-    // Validation for add mode
-    if (modalType === 'add') {
-      if (formData.password !== formData.confirmPassword) {
-        toast.error('Passwords do not match!');
-        return;
-      }
-      if (formData.password.length < 6) {
-        toast.error('Password must be at least 6 characters long!');
-        return;
-      }
-      
-      // Check if email already exists
-      if (associates.some(a => a.email === formData.email)) {
-        toast.error('Email already exists!');
-        return;
-      }
 
-      const newAssociate = {
-        ...formData,
-        id: Date.now(),
-        joinDate: new Date().toISOString().split('T')[0],
-        leads: 0,
-        deals: 0,
-        status: 'Active',
-        createdBy: 'Admin',
-        permissions: formData.permissions
-      };
-      setAssociates([...associates, newAssociate]);
-      
-      // Show success with login credentials
-      Swal.fire({
-        title: 'Associate Added Successfully!',
-        html: `
-          <div class="text-left">
-            <p><strong>Name:</strong> ${formData.name}</p>
-            <p><strong>Email:</strong> ${formData.email}</p>
-            <p><strong>Password:</strong> ${formData.password}</p>
-            <p class="text-sm text-gray-600 mt-2">Please share these credentials with the associate.</p>
-          </div>
-        `,
-        icon: 'success',
-        confirmButtonColor: '#dc2626'
-      });
-    } else {
-      // For edit mode, don't update password unless provided
-      const updateData = { ...formData };
-      if (!updateData.password) {
-        delete updateData.password;
-        delete updateData.confirmPassword;
-      } else if (updateData.password !== updateData.confirmPassword) {
-        toast.error('Passwords do not match!');
-        return;
-      }
-      
-      setAssociates(associates.map(a => 
-        a.id === selectedAssociate.id 
-          ? { ...a, ...updateData }
-          : a
-      ));
-      toast.success(`${formData.name} has been updated.`);
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      return toast.error('Passwords do not match');
     }
-    
-    setFormData({
-      name: '',
-      phone: '',
-      email: '',
-      password: '',
-      confirmPassword: '',
-      role: '',
-      department: '',
-      permissions: []
-    });
-    setShowModal(false);
+
+    try {
+      await associatesAPI.changePassword(passwordData.associateId, {
+        newPassword: passwordData.newPassword
+      });
+
+      toast.success('Password changed successfully');
+      setShowPasswordModal(false);
+      setPasswordData({ associateId: null, newPassword: '', confirmPassword: '' });
+    } catch (err) {
+      toast.error(err.message);
+    }
   };
 
-  const handleRoleChange = (e) => {
-    const selectedRole = e.target.value;
-    const defaultPermissions = rolePermissions[selectedRole] || [];
-    
-    setFormData({
-      ...formData,
-      role: selectedRole,
-      permissions: defaultPermissions
-    });
-  };
-
-  const handlePermissionChange = (permission) => {
-    const updatedPermissions = formData.permissions.includes(permission)
-      ? formData.permissions.filter(p => p !== permission)
-      : [...formData.permissions, permission];
-    
-    setFormData({
-      ...formData,
-      permissions: updatedPermissions
-    });
-  };
-
+  // ================= UI =================
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Associate Management</h1>
-          <p className="text-gray-600 mt-2">Manage your sales team and associates</p>
+          <p className="text-gray-600 mt-2">Manage and track all your associates</p>
         </div>
         <button
           onClick={handleAddAssociate}
           className="btn-primary mt-4 sm:mt-0 flex items-center space-x-2 px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base"
         >
           <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
-          <span className="hidden sm:inline">Add Associate</span>
-          <span className="sm:hidden">Add</span>
+          <span className="hidden sm:inline">Add New Associate</span>
+          <span className="sm:hidden">Add Associate</span>
         </button>
       </div>
 
@@ -300,8 +270,8 @@ const AssociateManagement = () => {
           </div>
           <ExportButton 
             data={filteredAssociates} 
-            filename="associates" 
-            headers={['Name', 'Phone', 'Email', 'Role', 'Department', 'Join Date', 'Leads', 'Deals', 'Status']}
+            filename="associates"
+            headers={['Name', 'Phone', 'Email', 'Role', 'Department', 'Status', 'Date']}
           />
         </div>
 
@@ -310,95 +280,119 @@ const AssociateManagement = () => {
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-200">
-                <th className="text-left py-4 px-2 font-semibold text-gray-900">Associate</th>
+                <th className="text-left py-4 px-2 font-semibold text-gray-900">Associate Details</th>
                 <th className="text-left py-4 px-2 font-semibold text-gray-900">Contact</th>
                 <th className="text-left py-4 px-2 font-semibold text-gray-900">Role</th>
-                <th className="text-left py-4 px-2 font-semibold text-gray-900">Performance</th>
+                <th className="text-left py-4 px-2 font-semibold text-gray-900">Department</th>
                 <th className="text-left py-4 px-2 font-semibold text-gray-900">Status</th>
+                <th className="text-left py-4 px-2 font-semibold text-gray-900">Date</th>
                 <th className="text-left py-4 px-2 font-semibold text-gray-900">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {currentData.map((associate) => (
-                <tr key={associate.id} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="py-4 px-2">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-gradient-to-r from-red-600 to-black rounded-full flex items-center justify-center">
-                        <span className="text-white text-sm font-medium">{associate.name.charAt(0)}</span>
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-900">{associate.name}</p>
-                        <p className="text-sm text-gray-600">Joined: {associate.joinDate}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="py-4 px-2">
-                    <div className="space-y-1">
-                      <div className="flex items-center space-x-2">
-                        <Phone className="w-4 h-4 text-gray-400" />
-                        <span className="text-sm">{associate.phone}</span>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Mail className="w-4 h-4 text-gray-400" />
-                        <span className="text-sm text-gray-600">{associate.email}</span>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="py-4 px-2">
-                    <span className="font-medium">{associate.role}</span>
-                    <p className="text-sm text-gray-600">{associate.department}</p>
-                  </td>
-                  <td className="py-4 px-2">
-                    <div className="flex space-x-4">
-                      <div className="text-center">
-                        <p className="font-bold text-blue-600">{associate.leads}</p>
-                        <p className="text-xs text-gray-500">Leads</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="font-bold text-green-600">{associate.deals}</p>
-                        <p className="text-xs text-gray-500">Deals</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="py-4 px-2">
-                    <span className="px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                      {associate.status}
-                    </span>
-                  </td>
-                  <td className="py-4 px-2">
-                    <div className="flex items-center space-x-2">
-                      <button 
-                        onClick={() => handleViewAssociate(associate)}
-                        className="btn-primary p-2 rounded-lg"
-                        title="View Details"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                      <button 
-                        onClick={() => handleEditAssociate(associate)}
-                        className="btn-primary p-2 rounded-lg"
-                        title="Edit Associate"
-                      >
-                        <Edit className="w-4 h-4" />
-                      </button>
-                      <button 
-                        onClick={() => handleChangePassword(associate)}
-                        className="btn-primary p-2 rounded-lg"
-                        title="Change Password"
-                      >
-                        <Key className="w-4 h-4" />
-                      </button>
-                      <button 
-                        onClick={() => handleDeleteAssociate(associate.id)}
-                        className="btn-primary p-2 rounded-lg"
-                        title="Delete Associate"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
+              {loading ? (
+                <tr>
+                  <td colSpan="7" className="text-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600 mx-auto"></div>
                   </td>
                 </tr>
-              ))}
+              ) : currentData.length > 0 ? (
+                currentData.map((associate) => (
+                  <tr key={associate._id} className="border-b border-gray-100 hover:bg-gray-50">
+                    <td className="py-4 px-2">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 bg-gradient-to-r from-red-600 to-black rounded-full flex items-center justify-center">
+                          <Users className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900">{associate.name}</p>
+                          <p className="text-sm text-gray-600">{associate.username}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-4 px-2">
+                      <div className="space-y-1">
+                        <div className="flex items-center space-x-2">
+                          <Phone className="w-4 h-4 text-gray-400" />
+                          <span className="text-sm">{associate.phone}</span>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Mail className="w-4 h-4 text-gray-400" />
+                          <span className="text-sm text-gray-600">{associate.email}</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-4 px-2">
+                      <div className="flex items-center space-x-2">
+                        <Shield className="w-4 h-4 text-gray-400" />
+                        <span className="font-medium">{associate.role || 'Sales Executive'}</span>
+                      </div>
+                    </td>
+                    <td className="py-4 px-2">
+                      <span className="text-sm text-gray-900">{associate.department || 'Sales'}</span>
+                    </td>
+                    <td className="py-4 px-2">
+                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                        associate.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                      }`}>
+                        {associate.status}
+                      </span>
+                    </td>
+                    <td className="py-4 px-2">
+                      <div className="flex items-center space-x-2">
+                        <Calendar className="w-4 h-4 text-gray-400" />
+                        <span className="text-sm text-gray-600">{new Date(associate.createdAt).toLocaleDateString()}</span>
+                      </div>
+                    </td>
+                    <td className="py-4 px-2">
+                      <div className="flex items-center space-x-2">
+                        <button 
+                          onClick={() => handleViewAssociate(associate)}
+                          className="btn-primary p-2 rounded-lg"
+                          title="View Details"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button 
+                          onClick={() => handleEditAssociate(associate)}
+                          className="btn-primary p-2 rounded-lg"
+                          title="Edit Associate"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteAssociate(associate._id)}
+                          className="btn-primary p-2 rounded-lg"
+                          title="Delete Associate"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                        <button 
+                          onClick={() => {
+                            setPasswordData({ ...passwordData, associateId: associate._id });
+                            setShowPasswordModal(true);
+                          }}
+                          className="btn-primary p-2 rounded-lg"
+                          title="Change Password"
+                        >
+                          <Key className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="7" className="text-center py-12">
+                    <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No associates found</h3>
+                    <p className="text-gray-600 mb-4">Get started by adding your first associate</p>
+                    <button onClick={handleAddAssociate} className="btn-primary">
+                      Add Associate
+                    </button>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -413,20 +407,9 @@ const AssociateManagement = () => {
             totalItems={totalItems}
           />
         )}
-
-        {filteredAssociates.length === 0 && (
-          <div className="text-center py-12">
-            <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No associates found</h3>
-            <p className="text-gray-600 mb-4">Get started by adding your first associate</p>
-            <button onClick={handleAddAssociate} className="btn-primary">
-              Add Associate
-            </button>
-          </div>
-        )}
       </div>
 
-      {/* Modal */}
+      {/* Add/Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
@@ -437,26 +420,25 @@ const AssociateManagement = () => {
                 </h2>
                 <button
                   onClick={() => setShowModal(false)}
-                  className="p-2 hover:bg-gray-100 rounded-xl transition-colors"
+                  className="p-2 hover:bg-gray-100 rounded-xl transition-colors text-2xl"
                 >
                   ×
                 </button>
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Full Name *</label>
-                  <input
-                    type="text"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500"
-                    required
-                  />
-                </div>
-
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Full Name *</label>
+                    <input
+                      type="text"
+                      name="name"
+                      value={formData.name}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500"
+                      required
+                    />
+                  </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number *</label>
                     <input
@@ -469,6 +451,9 @@ const AssociateManagement = () => {
                       required
                     />
                   </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Email *</label>
                     <input
@@ -476,9 +461,20 @@ const AssociateManagement = () => {
                       name="email"
                       value={formData.email}
                       onChange={handleInputChange}
-                      placeholder="email@spcity.com"
                       className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500"
                       required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Username *</label>
+                    <input
+                      type="text"
+                      name="username"
+                      value={formData.username || ''}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500"
+                      required={modalType === 'add'}
+                      disabled={modalType === 'edit'}
                     />
                   </div>
                 </div>
@@ -492,10 +488,8 @@ const AssociateManagement = () => {
                         name="password"
                         value={formData.password}
                         onChange={handleInputChange}
-                        placeholder="Enter password"
                         className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500"
                         required
-                        minLength={6}
                       />
                     </div>
                     <div>
@@ -505,10 +499,8 @@ const AssociateManagement = () => {
                         name="confirmPassword"
                         value={formData.confirmPassword}
                         onChange={handleInputChange}
-                        placeholder="Confirm password"
                         className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500"
                         required
-                        minLength={6}
                       />
                     </div>
                   </div>
@@ -526,8 +518,8 @@ const AssociateManagement = () => {
                     >
                       <option value="">Select Role</option>
                       <option value="Sales Executive">Sales Executive</option>
-                      <option value="Sales Manager">Sales Manager</option>
                       <option value="Team Lead">Team Lead</option>
+                      <option value="Sales Manager">Sales Manager</option>
                     </select>
                   </div>
                   <div>
@@ -537,28 +529,24 @@ const AssociateManagement = () => {
                       name="department"
                       value={formData.department}
                       onChange={handleInputChange}
-                      placeholder="Sales Department"
+                      placeholder="e.g., Sales"
                       className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500"
                     />
                   </div>
                 </div>
 
-                {/* Permissions */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-3">Permissions</label>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Permissions</label>
+                  <div className="space-y-2">
                     {Object.entries(permissionLabels).map(([key, label]) => (
-                      <label key={key} className="flex items-center space-x-3 p-3 border border-gray-200 rounded-xl hover:bg-gray-50 cursor-pointer">
+                      <label key={key} className="flex items-center space-x-2">
                         <input
                           type="checkbox"
                           checked={formData.permissions.includes(key)}
                           onChange={() => handlePermissionChange(key)}
-                          className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
+                          className="rounded border-gray-300 text-red-600 focus:ring-red-500"
                         />
-                        <div className="flex items-center space-x-2">
-                          <Shield className="w-4 h-4 text-gray-400" />
-                          <span className="text-sm font-medium text-gray-700">{label}</span>
-                        </div>
+                        <span className="text-sm text-gray-700">{label}</span>
                       </label>
                     ))}
                   </div>
@@ -594,7 +582,7 @@ const AssociateManagement = () => {
                 <h2 className="text-xl font-bold text-gray-900">Associate Details</h2>
                 <button
                   onClick={() => setShowViewModal(false)}
-                  className="p-2 hover:bg-gray-100 rounded-xl transition-colors"
+                  className="p-2 hover:bg-gray-100 rounded-xl transition-colors text-2xl"
                 >
                   ×
                 </button>
@@ -608,13 +596,12 @@ const AssociateManagement = () => {
                   </div>
                   <div>
                     <h3 className="text-xl font-bold text-gray-900">{viewAssociate.name}</h3>
-                    <p className="text-gray-600">{viewAssociate.role}</p>
-                    <div className="flex items-center space-x-2 mt-1">
-                      <span className="px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                        {viewAssociate.status}
-                      </span>
-                      <span className="text-xs text-gray-500">ID: #{viewAssociate.id}</span>
-                    </div>
+                    <p className="text-gray-600">@{viewAssociate.username}</p>
+                    <span className={`inline-block mt-1 px-3 py-1 rounded-full text-xs font-medium ${
+                      viewAssociate.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                    }`}>
+                      {viewAssociate.status}
+                    </span>
                   </div>
                 </div>
 
@@ -641,20 +628,20 @@ const AssociateManagement = () => {
                   </div>
 
                   <div className="space-y-4">
-                    <h4 className="font-semibold text-gray-900 border-b pb-2">Work Details</h4>
+                    <h4 className="font-semibold text-gray-900 border-b pb-2">Role & Department</h4>
                     <div className="space-y-3">
                       <div className="flex items-center space-x-3">
-                        <Calendar className="w-5 h-5 text-gray-400" />
+                        <Shield className="w-5 h-5 text-gray-400" />
                         <div>
-                          <p className="text-sm text-gray-600">Join Date</p>
-                          <p className="font-medium">{viewAssociate.joinDate}</p>
+                          <p className="text-sm text-gray-600">Role</p>
+                          <p className="font-medium">{viewAssociate.role || 'Sales Executive'}</p>
                         </div>
                       </div>
                       <div className="flex items-center space-x-3">
-                        <Users className="w-5 h-5 text-gray-400" />
+                        <UserCheck className="w-5 h-5 text-gray-400" />
                         <div>
                           <p className="text-sm text-gray-600">Department</p>
-                          <p className="font-medium">{viewAssociate.department}</p>
+                          <p className="font-medium">{viewAssociate.department || 'Sales'}</p>
                         </div>
                       </div>
                     </div>
@@ -662,44 +649,74 @@ const AssociateManagement = () => {
                 </div>
 
                 {/* Permissions */}
-                <div className="space-y-4">
-                  <h4 className="font-semibold text-gray-900 border-b pb-2">Permissions & Access</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    {viewAssociate.permissions?.map((permission) => (
-                      <div key={permission} className="flex items-center space-x-2 p-3 bg-green-50 rounded-xl">
-                        <UserCheck className="w-4 h-4 text-green-600" />
-                        <span className="text-sm font-medium text-green-800">{permissionLabels[permission]}</span>
-                      </div>
-                    ))}
+                {viewAssociate.permissions && viewAssociate.permissions.length > 0 && (
+                  <div className="space-y-4">
+                    <h4 className="font-semibold text-gray-900 border-b pb-2">Permissions</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {viewAssociate.permissions.map(perm => (
+                        <span key={perm} className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
+                          {permissionLabels[perm] || perm}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                  {(!viewAssociate.permissions || viewAssociate.permissions.length === 0) && (
-                    <p className="text-gray-500 text-sm">No permissions assigned</p>
-                  )}
+                )}
+
+                {/* Login Credentials */}
+                <div className="space-y-4">
+                  <h4 className="font-semibold text-gray-900 border-b pb-2">Login Credentials</h4>
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                          <UserCheck className="w-5 h-5 text-yellow-600" />
+                          <div>
+                            <p className="text-sm text-gray-600">Username</p>
+                            <p className="font-medium text-gray-900">{viewAssociate.username}</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                          <Key className="w-5 h-5 text-yellow-600" />
+                          <div>
+                            <p className="text-sm text-gray-600">Password</p>
+                            <p className="font-mono text-sm bg-white px-3 py-1 rounded border border-yellow-300">
+                              {showPassword ? (viewAssociate.plainPassword || 'Password hidden for security') : '••••••••'}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="p-2 hover:bg-yellow-100 rounded-lg transition-colors"
+                          title={showPassword ? 'Hide password' : 'Show password'}
+                        >
+                          {showPassword ? <EyeOff className="w-5 h-5 text-yellow-600" /> : <Eye className="w-5 h-5 text-yellow-600" />}
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-xs text-yellow-700 mt-3 flex items-center">
+                      <Shield className="w-3 h-3 mr-1" />
+                      {viewAssociate.plainPassword ? 'Share these credentials securely with the associate' : 'Password is only visible when first created'}
+                    </p>
+                  </div>
                 </div>
 
-                {/* Performance Stats */}
+                {/* Additional Information */}
                 <div className="space-y-4">
-                  <h4 className="font-semibold text-gray-900 border-b pb-2">Performance Overview</h4>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-blue-50 p-4 rounded-xl text-center">
-                      <p className="text-2xl font-bold text-blue-600">{viewAssociate.leads}</p>
-                      <p className="text-sm text-gray-600">Total Leads</p>
+                  <h4 className="font-semibold text-gray-900 border-b pb-2">Additional Information</h4>
+                  <div className="flex items-center space-x-3">
+                    <Calendar className="w-5 h-5 text-gray-400" />
+                    <div>
+                      <p className="text-sm text-gray-600">Date Added</p>
+                      <p className="font-medium">{new Date(viewAssociate.createdAt).toLocaleDateString()}</p>
                     </div>
-                    <div className="bg-green-50 p-4 rounded-xl text-center">
-                      <p className="text-2xl font-bold text-green-600">{viewAssociate.deals}</p>
-                      <p className="text-sm text-gray-600">Deals Closed</p>
-                    </div>
-                  </div>
-                  <div className="bg-purple-50 p-4 rounded-xl text-center">
-                    <p className="text-lg font-bold text-purple-600">
-                      {viewAssociate.leads > 0 ? ((viewAssociate.deals / viewAssociate.leads) * 100).toFixed(1) : 0}%
-                    </p>
-                    <p className="text-sm text-gray-600">Conversion Rate</p>
                   </div>
                 </div>
 
                 {/* Action Buttons */}
-                <div className="flex space-x-3 pt-4 border-t">
+                <div className="flex space-x-4 pt-4 border-t">
                   <button
                     onClick={() => {
                       setShowViewModal(false);
@@ -708,17 +725,7 @@ const AssociateManagement = () => {
                     className="flex-1 btn-primary flex items-center justify-center space-x-2"
                   >
                     <Edit className="w-4 h-4" />
-                    <span>Edit</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      setShowViewModal(false);
-                      handleChangePassword(viewAssociate);
-                    }}
-                    className="flex-1 btn-primary flex items-center justify-center space-x-2"
-                  >
-                    <Key className="w-4 h-4" />
-                    <span>Password</span>
+                    <span>Edit Associate</span>
                   </button>
                   <button
                     onClick={() => setShowViewModal(false)}
@@ -742,47 +749,32 @@ const AssociateManagement = () => {
                 <h2 className="text-xl font-bold text-gray-900">Change Password</h2>
                 <button
                   onClick={() => setShowPasswordModal(false)}
-                  className="p-2 hover:bg-gray-100 rounded-xl transition-colors"
+                  className="p-2 hover:bg-gray-100 rounded-xl transition-colors text-2xl"
                 >
                   ×
                 </button>
               </div>
 
-              <form onSubmit={handlePasswordSubmit} className="space-y-6">
+              <form onSubmit={handlePasswordSubmit} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">New Password *</label>
                   <input
                     type="password"
                     value={passwordData.newPassword}
-                    onChange={(e) => setPasswordData({...passwordData, newPassword: e.target.value})}
-                    placeholder="Enter new password"
+                    onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500"
                     required
-                    minLength={6}
                   />
                 </div>
-
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Confirm Password *</label>
                   <input
                     type="password"
                     value={passwordData.confirmPassword}
-                    onChange={(e) => setPasswordData({...passwordData, confirmPassword: e.target.value})}
-                    placeholder="Confirm new password"
+                    onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500"
                     required
-                    minLength={6}
                   />
-                </div>
-
-                <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
-                  <div className="flex items-center space-x-2">
-                    <Shield className="w-5 h-5 text-yellow-600" />
-                    <p className="text-sm text-yellow-800 font-medium">Security Notice</p>
-                  </div>
-                  <p className="text-sm text-yellow-700 mt-1">
-                    The associate will need to use the new password for their next login.
-                  </p>
                 </div>
 
                 <div className="flex space-x-4 pt-4">
@@ -795,10 +787,9 @@ const AssociateManagement = () => {
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 btn-primary flex items-center justify-center space-x-2"
+                    className="flex-1 btn-primary"
                   >
-                    <Key className="w-4 h-4" />
-                    <span>Change Password</span>
+                    Change Password
                   </button>
                 </div>
               </form>

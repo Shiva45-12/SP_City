@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { toast } from 'react-toastify';
+import { sitesAPI, projectsAPI } from '../utils/api';
 import {
   Box,
   Button,
@@ -47,84 +49,132 @@ import { MapPin, Plus, Edit, Trash2, Eye, Calendar, Ruler, Home, Search, MoreVer
 
 const SiteManagement = () => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState('cards'); // 'cards' or 'table'
+  const [viewMode, setViewMode] = useState('cards');
   const { isOpen, onOpen, onClose } = useDisclosure();
-  const toast = useToast();
+  const { isOpen: isViewOpen, onOpen: onViewOpen, onClose: onViewClose } = useDisclosure();
+  const [loading, setLoading] = useState(true);
+  const [sites, setSites] = useState([]);
+  const [projects, setProjects] = useState([]);
+  const [modalType, setModalType] = useState('add');
+  const [selectedSite, setSelectedSite] = useState(null);
 
   const [formData, setFormData] = useState({
     name: '',
-    location: '',
     address: '',
-    totalArea: '',
-    availableArea: '',
-    pricePerSqFt: '',
-    amenities: '',
-    nearbyFacilities: '',
-    connectivity: '',
-    legalStatus: '',
-    possession: '',
-    description: '',
+    city: '',
+    state: '',
+    pincode: '',
+    area: '',
+    price: '',
+    type: '',
+    project: '',
+    features: '',
+    status: 'Available',
     image: null,
     imagePreview: null
   });
 
-  const sites = [
-    {
-      id: 1,
-      name: 'SP Heights Site',
-      location: 'Sector 15, Gurgaon',
-      address: 'Plot No. 123, Sector 15, Gurgaon, Haryana - 122001',
-      totalArea: '5.2 Acres',
-      availableArea: '3.8 Acres',
-      pricePerSqFt: '₹8,500',
-      amenities: 'Club House, Swimming Pool, Gym, Garden',
-      nearbyFacilities: 'Metro Station (2km), Hospital (1km), School (500m)',
-      connectivity: 'NH-8, Dwarka Expressway',
-      legalStatus: 'Approved',
-      possession: 'Ready to Move',
-      status: 'Active',
-      projects: 2,
-      image: 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=400&h=300&fit=crop'
-    },
-    {
-      id: 2,
-      name: 'SP Gardens Site',
-      location: 'Sector 22, Noida',
-      address: 'Plot No. 456, Sector 22, Noida, UP - 201301',
-      totalArea: '8.5 Acres',
-      availableArea: '6.2 Acres',
-      pricePerSqFt: '₹6,200',
-      amenities: 'Park, Playground, Community Hall, Security',
-      nearbyFacilities: 'Metro Station (1.5km), Mall (2km), School (800m)',
-      connectivity: 'Noida Expressway, DND Flyway',
-      legalStatus: 'Approved',
-      possession: 'Under Construction',
-      status: 'Active',
-      projects: 1
-    },
-    {
-      id: 3,
-      name: 'SP Plaza Site',
-      location: 'MG Road, Delhi',
-      address: 'Plot No. 789, MG Road, Connaught Place, Delhi - 110001',
-      totalArea: '2.1 Acres',
-      availableArea: '0.5 Acres',
-      pricePerSqFt: '₹25,000',
-      amenities: 'Parking, Elevators, Power Backup, CCTV',
-      nearbyFacilities: 'Metro Station (200m), Airport (15km), Railway (5km)',
-      connectivity: 'Ring Road, Rajpath',
-      legalStatus: 'Approved',
-      possession: 'Ready to Move',
-      status: 'Sold Out',
-      projects: 1
+  useEffect(() => {
+    fetchSites();
+    fetchProjects();
+  }, [searchTerm]);
+
+  const fetchSites = async () => {
+    try {
+      setLoading(true);
+      const params = {
+        limit: 100,
+        ...(searchTerm && { search: searchTerm })
+      };
+      
+      const response = await sitesAPI.getAll(params);
+      if (response.success) {
+        setSites(response.data);
+      }
+    } catch (error) {
+      toast.error('Failed to fetch sites');
+      console.error('Error fetching sites:', error);
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
+
+  const fetchProjects = async () => {
+    try {
+      const response = await projectsAPI.getAll({ limit: 100 });
+      if (response.success) {
+        setProjects(response.data);
+      }
+    } catch (error) {
+      console.error('Error fetching projects:', error);
+    }
+  };
 
   const filteredSites = sites.filter(site =>
     site.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    site.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    site.city.toLowerCase().includes(searchTerm.toLowerCase()) ||
     site.address.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const handleAddSite = () => {
+    setModalType('add');
+    setSelectedSite(null);
+    setFormData({
+      name: '',
+      address: '',
+      city: '',
+      state: '',
+      pincode: '',
+      area: '',
+      price: '',
+      type: '',
+      project: '',
+      features: '',
+      status: 'Available',
+      image: null,
+      imagePreview: null
+    });
+    onOpen();
+  };
+
+  const handleEditSite = (site) => {
+    setModalType('edit');
+    setSelectedSite(site);
+    setFormData({
+      name: site.name,
+      address: site.address,
+      city: site.city,
+      state: site.state,
+      pincode: site.pincode,
+      area: site.area.toString(),
+      price: site.price.toString(),
+      type: site.type,
+      project: site.project?._id || '',
+      features: site.features?.join(', ') || '',
+      status: site.status,
+      image: null,
+      imagePreview: site.image || null
+    });
+    onOpen();
+  };
+
+  const handleDeleteSite = async (id) => {
+    if (window.confirm('Are you sure you want to delete this site?')) {
+      try {
+        await sitesAPI.delete(id);
+        toast.success('Site deleted successfully!');
+        fetchSites();
+      } catch (error) {
+        toast.error('Failed to delete site');
+        console.error('Error deleting site:', error);
+      }
+    }
+  };
+
+  const handleViewSite = (site) => {
+    setSelectedSite(site);
+    onViewOpen();
+  };
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -153,30 +203,67 @@ const SiteManagement = () => {
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    toast({
-      title: 'Site Added Successfully',
-      description: `${formData.name} has been added to sites.`,
-      status: 'success',
-      duration: 3000,
-      isClosable: true,
-    });
-    setFormData({
-      name: '',
-      location: '',
-      address: '',
-      totalArea: '',
-      availableArea: '',
-      pricePerSqFt: '',
-      amenities: '',
-      nearbyFacilities: '',
-      connectivity: '',
-      legalStatus: '',
-      possession: '',
-      description: ''
-    });
-    onClose();
+    
+    try {
+      console.log('📝 Form Data:', formData);
+      
+      const formDataToSend = new FormData();
+      
+      formDataToSend.append('name', formData.name || '');
+      formDataToSend.append('address', formData.address || '');
+      formDataToSend.append('city', formData.city || '');
+      formDataToSend.append('state', formData.state || '');
+      formDataToSend.append('pincode', formData.pincode || '');
+      formDataToSend.append('area', formData.area || '0');
+      formDataToSend.append('price', formData.price || '0');
+      formDataToSend.append('type', formData.type || '');
+      formDataToSend.append('project', formData.project || '');
+      formDataToSend.append('status', formData.status || 'Available');
+      
+      if (formData.features) {
+        const featuresArray = formData.features.split(',').map(f => f.trim()).filter(f => f);
+        featuresArray.forEach(feature => formDataToSend.append('features', feature));
+      }
+      
+      if (formData.image) {
+        formDataToSend.append('image', formData.image);
+      }
+      
+      console.log('📤 Sending to API...');
+      
+      if (modalType === 'add') {
+        const response = await sitesAPI.create(formDataToSend);
+        console.log('✅ Response:', response);
+        toast.success(`${formData.name} has been added to sites.`);
+      } else {
+        const response = await sitesAPI.update(selectedSite._id, formDataToSend);
+        console.log('✅ Response:', response);
+        toast.success(`${formData.name} has been updated.`);
+      }
+
+      setFormData({
+        name: '',
+        address: '',
+        city: '',
+        state: '',
+        pincode: '',
+        area: '',
+        price: '',
+        type: '',
+        project: '',
+        features: '',
+        status: 'Available',
+        image: null,
+        imagePreview: null
+      });
+      onClose();
+      fetchSites();
+    } catch (error) {
+      console.error('❌ Error:', error);
+      toast.error(`Failed to ${modalType} site`);
+    }
   };
 
   return (
@@ -197,7 +284,7 @@ const SiteManagement = () => {
               leftIcon={<Plus size={20} />}
               colorScheme=""
               className='bg-gradient-to-r from-red-600 to-black text-white'
-              onClick={onOpen}
+              onClick={handleAddSite}
               size="lg"
             >
               Add Site
@@ -240,7 +327,7 @@ const SiteManagement = () => {
         {viewMode === 'cards' && (
           <SimpleGrid columns={{ base: 1, lg: 2, xl: 3 }} spacing={6}>
             {filteredSites.map((site) => (
-              <Card key={site.id}>
+              <Card key={site._id}>
                 <CardBody>
                   <VStack spacing={4}>
                     <Box position="relative" w="full" h="48" bg="gray.200" rounded="xl" overflow="hidden">
@@ -275,7 +362,7 @@ const SiteManagement = () => {
                         <Text fontSize="xl" fontWeight="bold">{site.name}</Text>
                         <HStack spacing={2} mt={1}>
                           <MapPin size={16} />
-                          <Text fontSize="sm" color="gray.600">{site.location}</Text>
+                          <Text fontSize="sm" color="gray.600">{site.city}, {site.state}</Text>
                         </HStack>
                       </Box>
 
@@ -286,29 +373,24 @@ const SiteManagement = () => {
 
                       <SimpleGrid columns={2} spacing={4} w="full">
                         <Box textAlign="center" p={3} bg="blue.50" rounded="lg">
-                          <Text fontSize="lg" fontWeight="bold" color="blue.600">{site.totalArea}</Text>
-                          <Text fontSize="xs" color="gray.600">Total Area</Text>
+                          <Text fontSize="lg" fontWeight="bold" color="blue.600">{site.area} sq ft</Text>
+                          <Text fontSize="xs" color="gray.600">Area</Text>
                         </Box>
                         <Box textAlign="center" p={3} bg="green.50" rounded="lg">
-                          <Text fontSize="lg" fontWeight="bold" color="green.600">{site.availableArea}</Text>
-                          <Text fontSize="xs" color="gray.600">Available</Text>
+                          <Text fontSize="lg" fontWeight="bold" color="green.600">₹{site.price.toLocaleString()}</Text>
+                          <Text fontSize="xs" color="gray.600">Price</Text>
                         </Box>
                       </SimpleGrid>
 
                       <Box w="full">
                         <HStack justify="space-between">
-                          <Text fontSize="sm" color="gray.500">Price/Sq.Ft:</Text>
-                          <Text fontSize="sm" fontWeight="bold" color="red.600">{site.pricePerSqFt}</Text>
+                          <Text fontSize="sm" color="gray.500">Type:</Text>
+                          <Text fontSize="sm" fontWeight="bold">{site.type}</Text>
                         </HStack>
                         <HStack justify="space-between" mt={1}>
-                          <Text fontSize="sm" color="gray.500">Projects:</Text>
-                          <Text fontSize="sm" fontWeight="bold">{site.projects}</Text>
+                          <Text fontSize="sm" color="gray.500">Project:</Text>
+                          <Text fontSize="sm" fontWeight="bold">{site.project?.name || 'N/A'}</Text>
                         </HStack>
-                      </Box>
-
-                      <Box w="full">
-                        <Text fontSize="sm" color="gray.500" mb={1}>Legal Status:</Text>
-                        <Badge colorScheme="green" variant="subtle">{site.legalStatus}</Badge>
                       </Box>
 
                       <HStack spacing={2} w="full" pt={2}>
@@ -318,6 +400,7 @@ const SiteManagement = () => {
                           variant="solid" 
                           flex={1} 
                           leftIcon={<Eye size={16} />}
+                          onClick={() => handleViewSite(site)}
                         >
                           View
                         </Button>
@@ -327,6 +410,7 @@ const SiteManagement = () => {
                           variant="solid" 
                           flex={1} 
                           leftIcon={<Edit size={16} />}
+                          onClick={() => handleEditSite(site)}
                         >
                           Edit
                         </Button>
@@ -335,6 +419,7 @@ const SiteManagement = () => {
                           className="bg-gradient-to-r from-red-600 to-black text-white hover:from-red-700 hover:to-gray-900"
                           variant="solid"
                           icon={<Trash2 size={16} />}
+                          onClick={() => handleDeleteSite(site._id)}
                         />
                       </HStack>
                     </VStack>
@@ -354,15 +439,15 @@ const SiteManagement = () => {
                   <Tr>
                     <Th>Site Details</Th>
                     <Th>Location</Th>
-                    <Th>Area Details</Th>
-                    <Th>Price/Sq.Ft</Th>
+                    <Th>Area</Th>
+                    <Th>Price</Th>
                     <Th>Status</Th>
                     <Th>Actions</Th>
                   </Tr>
                 </Thead>
                 <Tbody>
                   {filteredSites.map((site) => (
-                    <Tr key={site.id} _hover={{ bg: 'gray.50' }}>
+                    <Tr key={site._id} _hover={{ bg: 'gray.50' }}>
                       <Td>
                         <HStack spacing={3}>
                           <Box w={10} h={10} bg="gray.200" rounded="lg" display="flex" alignItems="center" justifyContent="center">
@@ -370,7 +455,7 @@ const SiteManagement = () => {
                           </Box>
                           <Box>
                             <Text fontWeight="medium">{site.name}</Text>
-                            <Text fontSize="sm" color="gray.500">{site.projects} projects</Text>
+                            <Text fontSize="sm" color="gray.500">{site.type}</Text>
                           </Box>
                         </HStack>
                       </Td>
@@ -378,19 +463,16 @@ const SiteManagement = () => {
                         <VStack align="start" spacing={1}>
                           <HStack spacing={2}>
                             <MapPin size={16} />
-                            <Text fontSize="sm">{site.location}</Text>
+                            <Text fontSize="sm">{site.city}, {site.state}</Text>
                           </HStack>
                           <Text fontSize="xs" color="gray.500">{site.address}</Text>
                         </VStack>
                       </Td>
                       <Td>
-                        <VStack align="start" spacing={1}>
-                          <Text fontSize="sm">Total: {site.totalArea}</Text>
-                          <Text fontSize="sm" color="green.600">Available: {site.availableArea}</Text>
-                        </VStack>
+                        <Text fontSize="sm">{site.area} sq ft</Text>
                       </Td>
                       <Td>
-                        <Text fontWeight="bold" color="red.600">{site.pricePerSqFt}</Text>
+                        <Text fontWeight="bold" color="red.600">₹{site.price.toLocaleString()}</Text>
                       </Td>
                       <Td>
                         <Badge colorScheme={getStatusColor(site.status)} variant="subtle">
@@ -404,18 +486,21 @@ const SiteManagement = () => {
                             size="sm"
                             className="bg-gradient-to-r from-red-600 to-black text-white hover:from-red-700 hover:to-gray-900"
                             variant="solid"
+                            onClick={() => handleViewSite(site)}
                           />
                           <IconButton
                             icon={<Edit size={16} />}
                             size="sm"
                             className="bg-gradient-to-r from-red-600 to-black text-white hover:from-red-700 hover:to-gray-900"
                             variant="solid"
+                            onClick={() => handleEditSite(site)}
                           />
                           <IconButton
-                            icon={<MoreVertical size={16} />}
+                            icon={<Trash2 size={16} />}
                             size="sm"
                             className="bg-gradient-to-r from-red-600 to-black text-white hover:from-red-700 hover:to-gray-900"
                             variant="solid"
+                            onClick={() => handleDeleteSite(site._id)}
                           />
                         </HStack>
                       </Td>
@@ -428,173 +513,163 @@ const SiteManagement = () => {
         )}
       </VStack>
 
-      {/* Add Site Modal */}
-      <Modal isOpen={isOpen} onClose={onClose} size="4xl">
+      {/* Add/Edit Site Modal */}
+      <Modal isOpen={isOpen} onClose={onClose} size="3xl">
         <ModalOverlay />
         <ModalContent>
-          <ModalHeader>Add New Site</ModalHeader>
+          <ModalHeader>{modalType === 'add' ? 'Add New Site' : 'Edit Site'}</ModalHeader>
           <ModalCloseButton />
           <form onSubmit={handleSubmit}>
             <ModalBody>
               <VStack spacing={4}>
-                <HStack spacing={4} w="full">
-                  <FormControl isRequired>
-                    <FormLabel>Site Name</FormLabel>
-                    <Input
-                      name="name"
-                      value={formData.name}
-                      onChange={handleInputChange}
-                      placeholder="Enter site name"
-                    />
-                  </FormControl>
-                  <FormControl isRequired>
-                    <FormLabel>Location</FormLabel>
-                    <Input
-                      name="location"
-                      value={formData.location}
-                      onChange={handleInputChange}
-                      placeholder="Sector, City"
-                    />
-                  </FormControl>
-                </HStack>
-
-                <FormControl>
-                  <FormLabel>Site Image</FormLabel>
-                  <VStack spacing={4}>
-                    <Input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageChange}
-                      p={1}
-                    />
-                    {formData.imagePreview && (
-                      <Box w="full" maxW="200px">
-                        <img 
-                          src={formData.imagePreview} 
-                          alt="Preview"
-                          style={{
-                            width: '100%',
-                            height: '120px',
-                            objectFit: 'cover',
-                            borderRadius: '8px'
-                          }}
-                        />
-                      </Box>
-                    )}
-                  </VStack>
+                <FormControl isRequired>
+                  <FormLabel>Site Name</FormLabel>
+                  <Input
+                    name="name"
+                    value={formData.name}
+                    onChange={handleInputChange}
+                    placeholder="Enter site name"
+                  />
                 </FormControl>
 
-                <FormControl>
-                  <FormLabel>Complete Address</FormLabel>
-                  <Textarea
+                <FormControl isRequired>
+                  <FormLabel>Address</FormLabel>
+                  <Input
                     name="address"
                     value={formData.address}
                     onChange={handleInputChange}
-                    placeholder="Enter complete address with pincode"
-                    rows={2}
+                    placeholder="Street address"
                   />
                 </FormControl>
-                
+
                 <HStack spacing={4} w="full">
                   <FormControl isRequired>
-                    <FormLabel>Total Area</FormLabel>
+                    <FormLabel>City</FormLabel>
                     <Input
-                      name="totalArea"
-                      value={formData.totalArea}
+                      name="city"
+                      value={formData.city}
                       onChange={handleInputChange}
-                      placeholder="e.g., 5.2 Acres"
+                      placeholder="City"
                     />
                   </FormControl>
                   <FormControl isRequired>
-                    <FormLabel>Available Area</FormLabel>
+                    <FormLabel>State</FormLabel>
                     <Input
-                      name="availableArea"
-                      value={formData.availableArea}
+                      name="state"
+                      value={formData.state}
                       onChange={handleInputChange}
-                      placeholder="e.g., 3.8 Acres"
+                      placeholder="State"
                     />
                   </FormControl>
                   <FormControl isRequired>
-                    <FormLabel>Price per Sq.Ft</FormLabel>
+                    <FormLabel>Pincode</FormLabel>
                     <Input
-                      name="pricePerSqFt"
-                      value={formData.pricePerSqFt}
+                      name="pincode"
+                      value={formData.pincode}
                       onChange={handleInputChange}
-                      placeholder="e.g., ₹8,500"
+                      placeholder="Pincode"
                     />
                   </FormControl>
                 </HStack>
 
-                <FormControl>
-                  <FormLabel>Amenities</FormLabel>
-                  <Textarea
-                    name="amenities"
-                    value={formData.amenities}
-                    onChange={handleInputChange}
-                    placeholder="Club House, Swimming Pool, Gym, Garden..."
-                    rows={2}
-                  />
-                </FormControl>
+                <HStack spacing={4} w="full">
+                  <FormControl isRequired>
+                    <FormLabel>Area (sq ft)</FormLabel>
+                    <Input
+                      name="area"
+                      type="number"
+                      value={formData.area}
+                      onChange={handleInputChange}
+                      placeholder="Area in sq ft"
+                    />
+                  </FormControl>
+                  <FormControl isRequired>
+                    <FormLabel>Price (₹)</FormLabel>
+                    <Input
+                      name="price"
+                      type="number"
+                      value={formData.price}
+                      onChange={handleInputChange}
+                      placeholder="Total price"
+                    />
+                  </FormControl>
+                </HStack>
+
+                <HStack spacing={4} w="full">
+                  <FormControl isRequired>
+                    <FormLabel>Type</FormLabel>
+                    <Select
+                      name="type"
+                      value={formData.type}
+                      onChange={handleInputChange}
+                      placeholder="Select type"
+                    >
+                      <option value="Plot">Plot</option>
+                      <option value="Villa">Villa</option>
+                      <option value="Apartment">Apartment</option>
+                      <option value="Commercial">Commercial</option>
+                    </Select>
+                  </FormControl>
+                  <FormControl isRequired>
+                    <FormLabel>Project</FormLabel>
+                    <Select
+                      name="project"
+                      value={formData.project}
+                      onChange={handleInputChange}
+                      placeholder="Select project"
+                    >
+                      {projects.map(project => (
+                        <option key={project._id} value={project._id}>{project.name}</option>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </HStack>
 
                 <FormControl>
-                  <FormLabel>Nearby Facilities</FormLabel>
-                  <Textarea
-                    name="nearbyFacilities"
-                    value={formData.nearbyFacilities}
-                    onChange={handleInputChange}
-                    placeholder="Metro Station, Hospital, School, Mall..."
-                    rows={2}
-                  />
-                </FormControl>
-
-                <FormControl>
-                  <FormLabel>Connectivity</FormLabel>
+                  <FormLabel>Features (comma separated)</FormLabel>
                   <Input
-                    name="connectivity"
-                    value={formData.connectivity}
+                    name="features"
+                    value={formData.features}
                     onChange={handleInputChange}
-                    placeholder="NH-8, Expressway, Metro Line..."
+                    placeholder="e.g., Corner Plot, Park Facing, Gated Community"
                   />
                 </FormControl>
 
-                <HStack spacing={4} w="full">
-                  <FormControl isRequired>
-                    <FormLabel>Legal Status</FormLabel>
-                    <Select
-                      name="legalStatus"
-                      value={formData.legalStatus}
-                      onChange={handleInputChange}
-                      placeholder="Select Status"
-                    >
-                      <option value="Approved">Approved</option>
-                      <option value="Pending">Pending</option>
-                      <option value="Under Review">Under Review</option>
-                    </Select>
-                  </FormControl>
-                  <FormControl isRequired>
-                    <FormLabel>Possession</FormLabel>
-                    <Select
-                      name="possession"
-                      value={formData.possession}
-                      onChange={handleInputChange}
-                      placeholder="Select Possession"
-                    >
-                      <option value="Ready to Move">Ready to Move</option>
-                      <option value="Under Construction">Under Construction</option>
-                      <option value="Upcoming">Upcoming</option>
-                    </Select>
-                  </FormControl>
-                </HStack>
+                <FormControl>
+                  <FormLabel>Status</FormLabel>
+                  <Select
+                    name="status"
+                    value={formData.status}
+                    onChange={handleInputChange}
+                  >
+                    <option value="Available">Available</option>
+                    <option value="Sold">Sold</option>
+                    <option value="Reserved">Reserved</option>
+                  </Select>
+                </FormControl>
 
                 <FormControl>
-                  <FormLabel>Description</FormLabel>
-                  <Textarea
-                    name="description"
-                    value={formData.description}
-                    onChange={handleInputChange}
-                    placeholder="Additional site description..."
-                    rows={3}
+                  <FormLabel>Site Image</FormLabel>
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageChange}
+                    p={1}
                   />
+                  {formData.imagePreview && (
+                    <Box mt={2} w="full" maxW="200px">
+                      <img 
+                        src={formData.imagePreview} 
+                        alt="Preview"
+                        style={{
+                          width: '100%',
+                          height: '120px',
+                          objectFit: 'cover',
+                          borderRadius: '8px'
+                        }}
+                      />
+                    </Box>
+                  )}
                 </FormControl>
               </VStack>
             </ModalBody>
@@ -603,13 +678,136 @@ const SiteManagement = () => {
               <Button variant="ghost" mr={3} onClick={onClose}>
                 Cancel
               </Button>
-              <Button colorScheme="" 
-              className='bg-gradient-to-r from-red-600 to-black text-white'
-              type="submit">
-                Add Site
+              <Button 
+                colorScheme="" 
+                className='bg-gradient-to-r from-red-600 to-black text-white'
+                type="submit"
+              >
+                {modalType === 'add' ? 'Add Site' : 'Update Site'}
               </Button>
             </ModalFooter>
           </form>
+        </ModalContent>
+      </Modal>
+
+      {/* View Site Modal */}
+      <Modal isOpen={isViewOpen} onClose={onViewClose} size="4xl">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Site Details</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            {selectedSite && (
+              <VStack spacing={6} align="stretch">
+                {selectedSite.image && (
+                  <Box w="full" h="300px" bg="gray.200" rounded="xl" overflow="hidden">
+                    <img 
+                      src={selectedSite.image} 
+                      alt={selectedSite.name}
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover'
+                      }}
+                    />
+                  </Box>
+                )}
+
+                <SimpleGrid columns={2} spacing={6}>
+                  <Box>
+                    <Text fontSize="sm" color="gray.500" mb={1}>Site Name</Text>
+                    <Text fontSize="lg" fontWeight="bold">{selectedSite.name}</Text>
+                  </Box>
+                  <Box>
+                    <Text fontSize="sm" color="gray.500" mb={1}>Type</Text>
+                    <Badge colorScheme="blue" fontSize="md" p={2}>{selectedSite.type}</Badge>
+                  </Box>
+                </SimpleGrid>
+
+                <Box>
+                  <Text fontSize="sm" color="gray.500" mb={1}>Address</Text>
+                  <Text fontSize="md">{selectedSite.address}</Text>
+                </Box>
+
+                <SimpleGrid columns={3} spacing={4}>
+                  <Box>
+                    <Text fontSize="sm" color="gray.500" mb={1}>City</Text>
+                    <Text fontSize="md" fontWeight="medium">{selectedSite.city}</Text>
+                  </Box>
+                  <Box>
+                    <Text fontSize="sm" color="gray.500" mb={1}>State</Text>
+                    <Text fontSize="md" fontWeight="medium">{selectedSite.state}</Text>
+                  </Box>
+                  <Box>
+                    <Text fontSize="sm" color="gray.500" mb={1}>Pincode</Text>
+                    <Text fontSize="md" fontWeight="medium">{selectedSite.pincode}</Text>
+                  </Box>
+                </SimpleGrid>
+
+                <SimpleGrid columns={2} spacing={6}>
+                  <Box p={4} bg="blue.50" rounded="lg">
+                    <Text fontSize="sm" color="gray.600" mb={1}>Area</Text>
+                    <Text fontSize="2xl" fontWeight="bold" color="blue.600">{selectedSite.area} sq ft</Text>
+                  </Box>
+                  <Box p={4} bg="green.50" rounded="lg">
+                    <Text fontSize="sm" color="gray.600" mb={1}>Price</Text>
+                    <Text fontSize="2xl" fontWeight="bold" color="green.600">₹{selectedSite.price.toLocaleString()}</Text>
+                  </Box>
+                </SimpleGrid>
+
+                <SimpleGrid columns={2} spacing={6}>
+                  <Box>
+                    <Text fontSize="sm" color="gray.500" mb={1}>Project</Text>
+                    <Text fontSize="md" fontWeight="medium">{selectedSite.project?.name || 'N/A'}</Text>
+                  </Box>
+                  <Box>
+                    <Text fontSize="sm" color="gray.500" mb={1}>Status</Text>
+                    <Badge colorScheme={getStatusColor(selectedSite.status)} fontSize="md" p={2}>{selectedSite.status}</Badge>
+                  </Box>
+                </SimpleGrid>
+
+                {selectedSite.features && selectedSite.features.length > 0 && (
+                  <Box>
+                    <Text fontSize="sm" color="gray.500" mb={2}>Features</Text>
+                    <HStack spacing={2} flexWrap="wrap">
+                      {selectedSite.features.map((feature, index) => (
+                        <Badge key={index} colorScheme="purple" variant="subtle" p={2}>
+                          {feature}
+                        </Badge>
+                      ))}
+                    </HStack>
+                  </Box>
+                )}
+
+                <Box>
+                  <Text fontSize="sm" color="gray.500" mb={1}>Created At</Text>
+                  <Text fontSize="md">{new Date(selectedSite.createdAt).toLocaleDateString('en-IN', { 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}</Text>
+                </Box>
+              </VStack>
+            )}
+          </ModalBody>
+          <ModalFooter>
+            <Button 
+              className="bg-gradient-to-r from-red-600 to-black text-white"
+              mr={3} 
+              onClick={() => {
+                onViewClose();
+                handleEditSite(selectedSite);
+              }}
+              leftIcon={<Edit size={16} />}
+            >
+              Edit Site
+            </Button>
+            <Button variant="ghost" onClick={onViewClose}>
+              Close
+            </Button>
+          </ModalFooter>
         </ModalContent>
       </Modal>
     </Box>
