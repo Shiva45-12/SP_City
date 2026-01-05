@@ -1,4 +1,4 @@
-const API_BASE_URL = 'https://sp-city-backend.onrender.com/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://sp-city-backend.onrender.com/api';
 
 // Get auth token
 const getAuthToken = () => {
