@@ -1,4 +1,6 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://sp-city-backend.onrender.com/api';
+// const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = 'https://sp-city-backend.onrender.com/api';
+// const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://sp-city-backend.onrender.com/api';
 
 // Get auth token
 const getAuthToken = () => {
@@ -282,4 +284,35 @@ export const commissionsAPI = {
   approveProject: (projectId) => apiRequest(`/commissions/approve-project/${projectId}`, {
     method: 'PUT',
   }),
+};
+
+// Invoices APIs
+export const invoicesAPI = {
+  getAll: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return apiRequest(`/invoices${query ? `?${query}` : ''}`);
+  },
+  
+  getById: (id) => apiRequest(`/invoices/${id}`),
+  
+  create: (invoiceData) => apiRequest('/invoices', {
+    method: 'POST',
+    body: invoiceData,
+  }),
+  
+  update: (id, invoiceData) => apiRequest(`/invoices/${id}`, {
+    method: 'PUT',
+    body: invoiceData,
+  }),
+  
+  delete: (id) => apiRequest(`/invoices/${id}`, {
+    method: 'DELETE',
+  }),
+
+  updateStatus: (id, status) => apiRequest(`/invoices/${id}/status`, {
+    method: 'PUT',
+    body: { status },
+  }),
+
+  getStats: () => apiRequest('/invoices/stats'),
 };
